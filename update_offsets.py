@@ -9,35 +9,41 @@ import re
 import sys
 from pathlib import Path
 
-API_BASE = "https://rbxoffsets.xyz"
-HEADERS = {"rbxoffsets.xyz": "apiv1"}
+API_BASE    = "https://rbxoffsets.xyz"
+HEADERS     = {"rbxoffsets.xyz": "apiv1"}
 OFFSET_FILE = Path("src/engine/offset.h")
 
+
 def get_latest_version():
-    """Get the latest Roblox version from API"""
     try:
-        response = requests.get(f"{API_BASE}/api/version/raw", headers=HEADERS, timeout=10)
-        if response.status_code == 200:
-            return response.text.strip()
-        return None
+        r = requests.get(f"{API_BASE}/api/version/raw", headers=HEADERS, timeout=10)
+        return r.text.strip() if r.status_code == 200 else None
     except Exception as e:
         print(f"[-] Error fetching version: {e}")
         return None
 
+
 def get_latest_offsets():
-    """Get the latest offsets from API"""
     try:
-        response = requests.get(f"{API_BASE}/api/latest/raw", headers=HEADERS, timeout=10)
-        if response.status_code == 200:
-            return response.text
-        return None
+        r = requests.get(f"{API_BASE}/api/latest/raw", headers=HEADERS, timeout=10)
+        return r.text if r.status_code == 200 else None
     except Exception as e:
         print(f"[-] Error fetching offsets: {e}")
         return None
 
+
+def get_current_version():
+    try:
+        content = OFFSET_FILE.read_text(encoding="utf-8")
+        m = re.search(r'ClientVersion\s*=\s*"([^"]+)"', content)
+        return m.group(1) if m else None
+    except Exception as e:
+        print(f"[-] Error reading current version: {e}")
+        return None
+
+
 def get_compat_shims():
-    """Returns the compatibility namespace shims that map old nested namespaces
-    to the new flat offset::offsets:: layout. Appended after every update."""
+    """Compatibility namespace shims — maps old nested namespaces to the new flat layout."""
     return r"""
 // ─── Compatibility shims ─────────────────────────────────────────────────────
 namespace fakemodel {
@@ -166,27 +172,30 @@ namespace datamodel {
     static constexpr uintptr_t ToRenderView3  = offsets::DataModelToRenderView3;
 }
 namespace workspace { static constexpr uintptr_t world = offsets::World; }
-namespace world     { static constexpr uintptr_t Gravity = offsets::Gravity; static constexpr uintptr_t ReadOnlyGravity = offsets::ReadOnlyGravity; }
+namespace world {
+    static constexpr uintptr_t Gravity         = offsets::Gravity;
+    static constexpr uintptr_t ReadOnlyGravity  = offsets::ReadOnlyGravity;
+}
 namespace light {
     static constexpr uintptr_t Ambient               = offsets::LightingAmbient;
-    static constexpr uintptr_t OutdoorAmbient         = offsets::OutdoorAmbient;
-    static constexpr uintptr_t Brightness             = offsets::LightingBrightness;
-    static constexpr uintptr_t ClockTime              = offsets::ClockTime;
-    static constexpr uintptr_t LightColor             = offsets::LightColor;
-    static constexpr uintptr_t LightDirection         = offsets::LightDirection;
-    static constexpr uintptr_t SunPosition            = offsets::SunPosition;
-    static constexpr uintptr_t MoonPosition           = offsets::MoonPosition;
-    static constexpr uintptr_t FogEnd                 = offsets::FogEnd;
-    static constexpr uintptr_t FogStart               = offsets::FogStart;
-    static constexpr uintptr_t FogColor               = offsets::FogColor;
-    static constexpr uintptr_t ExposureCompensation   = offsets::ExposureCompensation;
-    static constexpr uintptr_t GlobalShadows          = offsets::GlobalShadows;
-    static constexpr uintptr_t ColorShift_Top         = offsets::ColorShift_Top;
-    static constexpr uintptr_t ColorShift_Bottom      = offsets::ColorShift_Bottom;
-    static constexpr uintptr_t GeographicLatitude     = offsets::GeographicLatitude;
+    static constexpr uintptr_t OutdoorAmbient        = offsets::OutdoorAmbient;
+    static constexpr uintptr_t Brightness            = offsets::LightingBrightness;
+    static constexpr uintptr_t ClockTime             = offsets::ClockTime;
+    static constexpr uintptr_t LightColor            = offsets::LightColor;
+    static constexpr uintptr_t LightDirection        = offsets::LightDirection;
+    static constexpr uintptr_t SunPosition           = offsets::SunPosition;
+    static constexpr uintptr_t MoonPosition          = offsets::MoonPosition;
+    static constexpr uintptr_t FogEnd                = offsets::FogEnd;
+    static constexpr uintptr_t FogStart              = offsets::FogStart;
+    static constexpr uintptr_t FogColor              = offsets::FogColor;
+    static constexpr uintptr_t ExposureCompensation  = offsets::ExposureCompensation;
+    static constexpr uintptr_t GlobalShadows         = offsets::GlobalShadows;
+    static constexpr uintptr_t ColorShift_Top        = offsets::ColorShift_Top;
+    static constexpr uintptr_t ColorShift_Bottom     = offsets::ColorShift_Bottom;
+    static constexpr uintptr_t GeographicLatitude    = offsets::GeographicLatitude;
     static constexpr uintptr_t EnvironmentDiffuseScale  = offsets::EnvironmentDiffuseScale;
     static constexpr uintptr_t EnvironmentSpecularScale = offsets::EnvironmentSpecularScale;
-    static constexpr uintptr_t sky                    = offsets::Sky;
+    static constexpr uintptr_t sky                   = offsets::Sky;
 }
 namespace mouseservice {
     static constexpr uintptr_t InputObject        = offsets::InputObject;
@@ -205,12 +214,12 @@ namespace silent {
     static constexpr uintptr_t FramePositionOffsetY = 0x8;
 }
 namespace animation {
-    static constexpr uintptr_t animator    = 0x100;
-    static constexpr uintptr_t IsPlaying   = 0xa40;
-    static constexpr uintptr_t Looped      = 0xdd;
-    static constexpr uintptr_t Speed       = 0xcc;
+    static constexpr uintptr_t animator     = 0x100;
+    static constexpr uintptr_t IsPlaying    = 0xa40;
+    static constexpr uintptr_t Looped       = 0xdd;
+    static constexpr uintptr_t Speed        = 0xcc;
     static constexpr uintptr_t TimePosition = 0xd0;
-    static constexpr uintptr_t AnimationId = offsets::AnimationId;
+    static constexpr uintptr_t AnimationId  = offsets::AnimationId;
 }
 namespace animator { static constexpr uintptr_t ActiveAnimations = offsets::ActiveAnimations; }
 namespace task {
@@ -224,7 +233,9 @@ namespace run {
     static constexpr uintptr_t HeartbeatFPS  = offsets::HeartbeatFPS;
     static constexpr uintptr_t HeartbeatTask = offsets::HeartbeatTask;
 }
-namespace physics_sender { static constexpr uintptr_t MaxBandwidthBps = offsets::PhysicsSenderMaxBandwidthBps; }
+namespace physics_sender {
+    static constexpr uintptr_t MaxBandwidthBps = offsets::PhysicsSenderMaxBandwidthBps;
+}
 namespace job {
     static constexpr uintptr_t fakemodel     = offsets::RenderJobFakeDataModel;
     static constexpr uintptr_t RealDataModel = offsets::RenderJobRealDataModel;
@@ -241,96 +252,75 @@ namespace prompt {
     static constexpr uintptr_t ObjectText            = offsets::ProximityPromptMaxObjectText;
 }
 """
-    """Read current version from offset.h"""
-    try:
-        with open(OFFSET_FILE, 'r') as f:
-            content = f.read()
-            match = re.search(r'ClientVersion = "([^"]+)"', content)
-            if match:
-                return match.group(1)
-    except Exception as e:
-        print(f"[-] Error reading current version: {e}")
-    return None
+
 
 def update_offset_file(content, version):
-    """Update the offset.h file with new content + compat shims"""
+    """Write new offset.h with header + flat offsets + compat shims."""
     try:
-        output = []
-        output.append("#pragma once")
-        output.append("")
-        output.append("#include <cstdint>")
-        output.append("#include <string>")
-        output.append("namespace offset {")
-        output.append(f'    inline std::string ClientVersion = "{version}";')
-        output.append("")
-        output.append(content.strip())
-        output.append("")
-        # Append compatibility shims so old nested namespaces still resolve
-        output.append(get_compat_shims())
-        output.append("")
-        output.append("} // end namespace offset")
-        output.append("")
-
-        with open(OFFSET_FILE, 'w') as f:
-            f.write('\n'.join(output))
-
+        lines = [
+            "#pragma once",
+            "",
+            "#include <cstdint>",
+            "#include <string>",
+            "namespace offset {",
+            f'    inline std::string ClientVersion = "{version}";',
+            "",
+            content.strip(),
+            "",
+            get_compat_shims(),
+            "",
+            "} // end namespace offset",
+            "",
+        ]
+        OFFSET_FILE.write_text('\n'.join(lines), encoding="utf-8")
         return True
     except Exception as e:
         print(f"[-] Error writing offset file: {e}")
         return False
+
 
 def main():
     print("=" * 50)
     print("   RBX External - Offset Updater")
     print("=" * 50)
     print()
-    
-    # Get current version
-    current_version = get_current_version()
-    if not current_version:
-        print("[-] Could not read current version")
+
+    current = get_current_version()
+    if not current:
+        print("[-] Could not read current version from offset.h")
         return 1
-    
-    print(f"[*] Current version: {current_version}")
+    print(f"[*] Current version : {current}")
     print(f"[*] Checking for updates...")
-    print()
-    
-    # Get latest version
-    latest_version = get_latest_version()
-    if not latest_version:
+
+    latest = get_latest_version()
+    if not latest:
         print("[-] Failed to fetch latest version from API")
         return 1
-    
-    print(f"[*] Latest version: {latest_version}")
-    
-    # Check if update needed
-    if latest_version == current_version:
+    print(f"[*] Latest version  : {latest}")
+
+    if latest == current:
         print("[+] Offsets are already up to date!")
         return 0
-    
-    print(f"[!] Update available: {current_version} -> {latest_version}")
+
+    print(f"[!] Update available: {current} -> {latest}")
     print(f"[*] Downloading latest offsets...")
-    
-    # Get latest offsets
-    offsets_content = get_latest_offsets()
-    if not offsets_content:
+
+    content = get_latest_offsets()
+    if not content:
         print("[-] Failed to fetch latest offsets from API")
         return 1
-    
-    print(f"[*] Updating offset.h...")
-    
-    # Update file
-    if not update_offset_file(offsets_content, latest_version):
-        print("[-] Failed to update offset file")
+
+    print(f"[*] Writing offset.h...")
+    if not update_offset_file(content, latest):
+        print("[-] Failed to write offset file")
         return 1
-    
-    print(f"[+] Successfully updated offsets!")
-    print(f"[+] {current_version} -> {latest_version}")
+
+    print(f"[+] Successfully updated: {current} -> {latest}")
     print()
-    print("[!] Please rebuild the project to apply changes:")
+    print("[!] Rebuild the project to apply:")
     print("    msbuild rbx-external.sln /p:Configuration=Release /p:Platform=x64")
-    
     return 0
+
 
 if __name__ == "__main__":
     sys.exit(main())

@@ -1,0 +1,24 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net9.0-windows</TargetFramework>
+    <UseWindowsForms>true</UseWindowsForms>
+    <AssemblyName>UWLoader</AssemblyName>
+    <RootNamespace>UWLoader</RootNamespace>
+    <Nullable>enable</Nullable>
+    <Optimize>true</Optimize>
+    <OutputPath>..\Build\Loader\</OutputPath>
+    <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+  </PropertyGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="background.png">
+      <LogicalName>background.png</LogicalName>
+    </EmbeddedResource>
+    <EmbeddedResource Include="button-bg.png">
+      <LogicalName>button-bg.png</LogicalName>
+    </EmbeddedResource>
+    <EmbeddedResource Include="..\Build\rbx-external.exe">
+      <LogicalName>rbx_external.exe</LogicalName>
+    </EmbeddedResource>
+  </ItemGroup>
+</Project>

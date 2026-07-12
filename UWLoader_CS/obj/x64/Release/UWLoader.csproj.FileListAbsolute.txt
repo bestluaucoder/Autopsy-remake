@@ -1,0 +1,15 @@
+c:\Users\grabi\OneDrive\Documents\rbloxext\Build\Loader\UWLoader.exe
+c:\Users\grabi\OneDrive\Documents\rbloxext\Build\Loader\UWLoader.deps.json
+c:\Users\grabi\OneDrive\Documents\rbloxext\Build\Loader\UWLoader.runtimeconfig.json
+c:\Users\grabi\OneDrive\Documents\rbloxext\Build\Loader\UWLoader.dll
+c:\Users\grabi\OneDrive\Documents\rbloxext\Build\Loader\UWLoader.pdb
+c:\Users\grabi\OneDrive\Documents\rbloxext\UWLoader_CS\obj\x64\Release\UWLoader.GeneratedMSBuildEditorConfig.editorconfig
+c:\Users\grabi\OneDrive\Documents\rbloxext\UWLoader_CS\obj\x64\Release\UWLoader.AssemblyInfoInputs.cache
+c:\Users\grabi\OneDrive\Documents\rbloxext\UWLoader_CS\obj\x64\Release\UWLoader.AssemblyInfo.cs
+c:\Users\grabi\OneDrive\Documents\rbloxext\UWLoader_CS\obj\x64\Release\UWLoader.csproj.CoreCompileInputs.cache
+c:\Users\grabi\OneDrive\Documents\rbloxext\UWLoader_CS\obj\x64\Release\UWLoader.sourcelink.json
+c:\Users\grabi\OneDrive\Documents\rbloxext\UWLoader_CS\obj\x64\Release\UWLoader.dll
+c:\Users\grabi\OneDrive\Documents\rbloxext\UWLoader_CS\obj\x64\Release\refint\UWLoader.dll
+c:\Users\grabi\OneDrive\Documents\rbloxext\UWLoader_CS\obj\x64\Release\UWLoader.pdb
+c:\Users\grabi\OneDrive\Documents\rbloxext\UWLoader_CS\obj\x64\Release\UWLoader.genruntimeconfig.cache
+c:\Users\grabi\OneDrive\Documents\rbloxext\UWLoader_CS\obj\x64\Release\ref\UWLoader.dll

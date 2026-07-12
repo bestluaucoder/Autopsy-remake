@@ -1,0 +1,5 @@
+c:\Users\grabi\OneDrive\Documents\rbloxext\UWLoader_CS\obj\x64\Release\net9.0-windows\win-x64\UWLoader.GeneratedMSBuildEditorConfig.editorconfig
+c:\Users\grabi\OneDrive\Documents\rbloxext\UWLoader_CS\obj\x64\Release\net9.0-windows\win-x64\UWLoader.AssemblyInfoInputs.cache
+c:\Users\grabi\OneDrive\Documents\rbloxext\UWLoader_CS\obj\x64\Release\net9.0-windows\win-x64\UWLoader.AssemblyInfo.cs
+c:\Users\grabi\OneDrive\Documents\rbloxext\UWLoader_CS\obj\x64\Release\net9.0-windows\win-x64\UWLoader.csproj.CoreCompileInputs.cache
+c:\Users\grabi\OneDrive\Documents\rbloxext\UWLoader_CS\obj\x64\Release\net9.0-windows\win-x64\UWLoader.sourcelink.json

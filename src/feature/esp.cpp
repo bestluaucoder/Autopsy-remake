@@ -705,6 +705,7 @@ namespace esp {
 
     void run()
     {
+        if (cache::g_teleporting.load()) return;
         if (global::render.Address == 0 || global::model.Address == 0)
             return;
 

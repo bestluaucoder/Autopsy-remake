@@ -171,6 +171,7 @@ namespace aim {
 
     void triggerbot()
     {
+        if (cache::g_teleporting.load()) return;
         if (!global::aim::TriggerBot || !global::render.Address)
             return;
 
@@ -314,6 +315,7 @@ namespace aim {
 
     void aimbot()
     {
+        if (cache::g_teleporting.load()) return;
         if (!global::aimbot::Enabled || !global::render.Address)
             return;
 

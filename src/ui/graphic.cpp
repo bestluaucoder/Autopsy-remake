@@ -3538,8 +3538,18 @@ void graphic::menu()
                 ImGui::TreePop();
             }
 
-            const float remaining = ImGui::GetContentRegionAvail().y - 34.f;
+            const float remaining = ImGui::GetContentRegionAvail().y - 64.f;
             if (remaining > 0.f) ImGui::Dummy({ 0.f, remaining });
+
+            // Discord button — opens invite in browser
+            if (ui::button("  DISCORD  ",
+                IM_COL32(50, 60, 160, 200), IM_COL32(88, 101, 242, 255),
+                IM_COL32(180, 190, 255, 255),
+                ImGui::GetContentRegionAvail().x, 26.f))
+                ShellExecuteA(nullptr, "open", "https://discord.gg/Bgy7uae9x",
+                              nullptr, nullptr, SW_SHOWNORMAL);
+
+            ui::gap(4.f);
 
             if (ui::button("  UNLOAD  ", color::DangerDim, color::DangerBrd, color::Danger,
                 ImGui::GetContentRegionAvail().x, 26.f))

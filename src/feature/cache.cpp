@@ -63,6 +63,7 @@ namespace cache {
     std::atomic<bool> References_Updated{ false };
     std::atomic<std::uint64_t> Current_GameID{ 0 };
     std::mutex Mutex;
+    std::atomic<bool> g_teleporting{ false };
 
     // Adaptive pattern matching for custom body part names
     bool matches_pattern(const std::string& name, const std::string& pattern) {
@@ -241,42 +242,70 @@ namespace cache {
         while (true) {
             try {
                 auto fakemodel = drive->read<std::uint64_t>(drive->modulebase() + offset::fakemodel::Pointer);
-                global::model.Address = drive->read<std::uint64_t>(fakemodel + offset::fakemodel::RealDataModel);
+                if (!fakemodel) { std::this_thread::sleep_for(std::chrono::milliseconds(500)); continue; }
 
-                if (global::model.Address != 0) {
-                    std::uint64_t GameID = drive->read<uint64_t>(global::model.Address + offset::datamodel::PlaceId);
+                auto new_model = drive->read<std::uint64_t>(fakemodel + offset::fakemodel::RealDataModel);
+                if (!new_model) { std::this_thread::sleep_for(std::chrono::milliseconds(500)); continue; }
 
-                    if (GameID != Stored_GameID) {
-                        Stored_GameID = GameID;
-                        Current_GameID.store(GameID);
-                        global::GameID = GameID;
+                global::model.Address = new_model;
+
+                std::uint64_t GameID = drive->read<uint64_t>(global::model.Address + offset::datamodel::PlaceId);
+
+                if (GameID != Stored_GameID) {
+                    // ── Teleport / game switch detected ──────────────────────
+                    // Signal all threads to pause so they don't crash on stale ptrs
+                    g_teleporting = true;
+
+                    // Clear player cache immediately
+                    {
+                        std::lock_guard<std::mutex> lock(Mutex);
+                        global::Player_Cache.clear();
+                    }
+                    global::LocalPlayer  = {};
+                    global::actor.Address    = 0;
+                    global::workspace.Address = 0;
+                    global::camera.Address    = 0;
+
+                    Stored_GameID = GameID;
+                    Current_GameID.store(GameID);
+                    global::GameID = GameID;
+
+                    if (GameID != 0) {
                         char body[96]{};
-                        std::snprintf(body, sizeof(body), "New game id detected: %llu",
+                        std::snprintf(body, sizeof(body), "New game id: %llu",
                             static_cast<unsigned long long>(GameID));
                         notify::push(notify::kind::info, "Game changed", body);
-                        global::actor.Address = global::model.childclass("Players").Address;
-                        auto Lightin = global::model.childclass("Lighting");
-                        global::light = sdk::light(Lightin.Address);
-                        global::workspace.Address = global::model.childclass("Workspace").Address;
-                        std::this_thread::sleep_for(std::chrono::seconds(5));
-                        global::camera.Address = global::workspace.childclass("Camera").Address;
-
-                        References_Updated.store(true);
-
-                        output::ok("%-18s%u", "process", drive->processid());
-                        output::ok("%-18s0x%llx", "handle", drive->processhandle());
-                        output::ok("%-18s0x%llx", "module", drive->modulebase());
-                        output::core("datamodel", "0x%llx", global::model);
-                        output::core("visual engine", "0x%llx", global::render);
-                        output::core("players", "0x%llx", global::actor);
-                        output::core("local player", "0x%llx", global::LocalPlayer);
-                        output::core("workspace", "0x%llx", global::workspace);
-                        output::core("camera", "0x%llx", global::camera);
-                        output::core("lighting", "0x%llx", global::light);
                     }
+
+                    // Wait for DataModel to stabilise after teleport
+                    std::this_thread::sleep_for(std::chrono::seconds(4));
+
+                    // Re-init pointers
+                    try {
+                        global::actor.Address     = global::model.childclass("Players").Address;
+                        global::workspace.Address = global::model.childclass("Workspace").Address;
+                        if (global::workspace.Address)
+                            global::camera.Address = global::workspace.childclass("Camera").Address;
+                        auto Lightin = global::model.childclass("Lighting");
+                        if (Lightin.Address) global::light = sdk::light(Lightin.Address);
+                    } catch (...) {}
+
+                    References_Updated.store(true);
+
+                    // Resume normal operation
+                    g_teleporting = false;
+
+                    output::ok("%-18s%u",    "process",  drive->processid());
+                    output::ok("%-18s0x%llx","module",   drive->modulebase());
+                    output::core("datamodel",    "0x%llx", global::model);
+                    output::core("players",      "0x%llx", global::actor);
+                    output::core("workspace",    "0x%llx", global::workspace);
+                    output::core("camera",       "0x%llx", global::camera);
                 }
             }
-            catch (...) {}
+            catch (...) {
+                g_teleporting = false; // always clear the flag on exception
+            }
 
             std::this_thread::sleep_for(std::chrono::milliseconds(500));
         }
@@ -452,6 +481,9 @@ namespace cache {
     }
 
     void runtime() {
+        // Skip during teleport — all addresses are being re-initialised
+        if (g_teleporting.load()) return;
+
         if (global::actor.Address == 0)
             return;
 

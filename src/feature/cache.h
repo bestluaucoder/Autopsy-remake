@@ -16,6 +16,7 @@ namespace cache
 {
     extern std::mutex Mutex;
     extern std::atomic<bool> Is_Running;
+    extern std::atomic<bool> g_teleporting;  // true while game switch in progress
     void run();
 }
 

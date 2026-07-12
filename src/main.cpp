@@ -79,6 +79,111 @@ namespace
         global::light = {};
     }
 
+    // Re-read all global pointers from the module base without restarting.
+    // Called when a teleport is detected.
+    void reinit_pointers()
+    {
+        try {
+            auto fakemodel = drive->read<std::uint64_t>(
+                drive->modulebase() + offset::fakemodel::Pointer);
+            if (!fakemodel) return;
+
+            auto model_addr = drive->read<std::uint64_t>(
+                fakemodel + offset::fakemodel::RealDataModel);
+            if (!model_addr) return;
+
+            // Atomically swap in new addresses
+            {
+                std::lock_guard<std::mutex> lock(cache::Mutex);
+                global::Player_Cache.clear();
+            }
+
+            global::model.Address     = model_addr;
+            global::render.Address    = drive->read<std::uint64_t>(
+                drive->modulebase() + offset::render::Pointer);
+
+            global::actor.Address     = global::model.childclass("Players").Address;
+            global::workspace.Address = global::model.childclass("Workspace").Address;
+
+            if (global::workspace.Address)
+                global::camera.Address = global::workspace.childclass("Camera").Address;
+
+            auto lightin = global::model.childclass("Lighting");
+            if (lightin.Address)
+                global::light = sdk::light(lightin.Address);
+
+            global::LocalPlayer = {};
+        }
+        catch (...) {
+            // If re-init fails, zero everything so the rest of the code
+            // safely skips this frame rather than crashing on a bad pointer.
+            clearstate();
+        }
+    }
+
+    // Monitor for teleports / game switches.
+    // Detects PlaceId change and re-initialises all pointers.
+    void teleport_monitor()
+    {
+        std::uint64_t last_place_id = 0;
+        bool          was_loaded    = false;
+
+        for (;;) {
+            Sleep(500);
+
+            if (!global::model.Address) {
+                last_place_id = 0;
+                was_loaded    = false;
+                continue;
+            }
+
+            try {
+                // Read GameLoaded flag first — during teleport it goes false
+                bool game_loaded = drive->read<bool>(
+                    global::model.Address + offset::datamodel::GameLoaded);
+
+                std::uint64_t place_id = 0;
+                if (game_loaded)
+                    place_id = drive->read<std::uint64_t>(
+                        global::model.Address + offset::datamodel::PlaceId);
+
+                if (game_loaded && !was_loaded) {
+                    // Game just finished loading (after a teleport or initial load)
+                    Sleep(1500); // wait for DataModel to stabilise
+                    reinit_pointers();
+                    last_place_id = place_id;
+                    was_loaded    = true;
+                    continue;
+                }
+
+                if (!game_loaded && was_loaded) {
+                    // Teleport in progress — clear stale state immediately
+                    clearstate();
+                    was_loaded    = false;
+                    last_place_id = 0;
+                    continue;
+                }
+
+                if (game_loaded && place_id != last_place_id && last_place_id != 0) {
+                    // PlaceId changed while loaded — unexpected game switch
+                    Sleep(1500);
+                    reinit_pointers();
+                    last_place_id = place_id;
+                }
+
+                was_loaded    = game_loaded;
+                last_place_id = place_id;
+            }
+            catch (...) {
+                // Pointer went invalid mid-read — clear and wait
+                clearstate();
+                was_loaded    = false;
+                last_place_id = 0;
+                Sleep(1000);
+            }
+        }
+    }
+
     bool relaunch()
     {
         char path[MAX_PATH]{};
@@ -161,6 +266,7 @@ std::int32_t main(std::int32_t argc, char** argv[])
     std::cout << "[unknownware] External loaded" << std::endl;
 
     std::thread(watch, BINARY_NAME).detach();
+    std::thread(teleport_monitor).detach();
 
     drive->process(BINARY_NAME);
     drive->attach(BINARY_NAME);

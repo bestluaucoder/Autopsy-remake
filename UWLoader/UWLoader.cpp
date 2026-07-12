@@ -479,6 +479,31 @@ int WINAPI WinMain(HINSTANCE hInst, HINSTANCE, LPSTR, int) {
     g_inst = hInst;
     settings_load();
 
+    // ── Discord gate ──────────────────────────────────────────────────────────
+    // Opens the invite in the browser, then shows a dialog asking to confirm.
+    // If the user clicks "Exit" we close immediately.
+    {
+        // Open Discord invite in default browser
+        ShellExecuteA(nullptr, "open", "https://discord.gg/Bgy7uae9x",
+                      nullptr, nullptr, SW_SHOWNORMAL);
+
+        // Native Win32 dialog — no window yet so we use MessageBox-style
+        // with custom text. We loop until they click "I Joined".
+        for (;;) {
+            int result = MessageBoxA(
+                nullptr,
+                "You must join the UW External Discord server to use this software.\n\n"
+                "discord.gg/Bgy7uae9x\n\n"
+                "The invite has been opened in your browser.\n"
+                "Once you have joined, click OK to continue.",
+                "UW External — Join Discord",
+                MB_OKCANCEL | MB_ICONINFORMATION | MB_TOPMOST);
+
+            if (result == IDOK)   break;           // joined, continue
+            if (result == IDCANCEL) return 0;      // declined, exit
+        }
+    }
+
     WNDCLASSEXA wc{};
     wc.cbSize        = sizeof(wc);
     wc.style         = CS_CLASSDC;
