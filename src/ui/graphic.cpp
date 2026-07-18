@@ -2356,8 +2356,8 @@ static void keepfocus(float elapsed)
 }
 
 static double welcome_start = -1.0;
-static bool   discord_confirmed = false;  // set true when user clicks "I Joined"
-static double discord_start    = -1.0;
+static bool discord_confirmed = false;
+static double discord_start  = -1.0;
 
 static bool welcome_done()
 {

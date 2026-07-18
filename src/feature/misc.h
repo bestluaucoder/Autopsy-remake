@@ -10,8 +10,16 @@ namespace misc {
     void tickrate();
     void anim_changer();
     void lighting();
+    void bhop();
+    void noclip();
+    void freeze_players();
     void run();
 
-    // Returns list of animation pack names for the menu combo
     const char** anim_pack_names(int* count_out);
+}
+
+namespace console {
+    void render();
+    bool is_open();
+    void toggle();
 }

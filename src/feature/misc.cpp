@@ -3,6 +3,10 @@
 #include <thread>
 #include <chrono>
 #include <mutex>
+#include <sstream>
+#include <cstdarg>
+#include <string>
+#include <cmath>
 #pragma comment(lib, "Winmm.lib")
 
 #include "engine/engine.h"
@@ -704,6 +708,436 @@ void lighting()
 
 } // namespace misc
 
+// ── BHop ──────────────────────────────────────────────────────────────────────
+// Ported from fragment hacks.cpp bhop_loop — bunny hop with ground detection,
+// position stepping while airborne, and speed boost.
+namespace misc {
+
+void bhop()
+{
+    auto set_jump = [](uint64_t hum, bool v) {
+        if (!hum) return;
+        drive->write<bool>(hum + offset::humanoid::Jump, v);
+    };
+
+    auto get_velocity_y = [&](sdk::part& hrp) -> float {
+        auto prim = hrp.primitive();
+        if (!prim.Address) return 0.f;
+        return drive->read<sdk::vector3>(prim.Address + offset::primitive::AssemblyLinearVelocity).y;
+    };
+
+    auto step_horizontal = [&](sdk::instance& part_inst, float vx, float vz, float dt, int reps) {
+        sdk::part p(part_inst.Address);
+        auto prim = p.primitive();
+        if (!prim.Address) return;
+        float step_dt = dt / (float)reps;
+        for (int i = 0; i < reps; ++i) {
+            auto pos = prim.position();
+            if (pos.y == 0.f && pos.x == 0.f && pos.z == 0.f) break;
+            float nx = pos.x + vx * step_dt;
+            float nz = pos.z + vz * step_dt;
+            drive->write<float>(prim.Address + offset::primitive::Position, nx);
+            drive->write<float>(prim.Address + offset::primitive::Position + sizeof(float) * 2, nz);
+        }
+    };
+
+    bool jump_latched = false;
+    float ground_ref_y = 0.f;
+    bool has_ground_ref = false;
+    auto last_jump = std::chrono::steady_clock::now() - std::chrono::milliseconds(120);
+
+    while (true)
+    {
+        Sleep(5);
+
+        HWND rbx = FindWindowA(nullptr, "Roblox");
+        bool focused = rbx && GetForegroundWindow() == rbx;
+        if (!focused || !global::model.Address) { Sleep(25); continue; }
+
+        if (!global::misc::BHop) {
+            if (jump_latched) {
+                auto& lp = global::LocalPlayer;
+                if (lp.humanoid.Address)
+                    set_jump(lp.humanoid.Address, false);
+            }
+            jump_latched = false;
+            has_ground_ref = false;
+            Sleep(25);
+            continue;
+        }
+
+        auto& lp = global::LocalPlayer;
+        if (!lp.HumanoidRootPart.Address || !lp.humanoid.Address) {
+            has_ground_ref = false;
+            Sleep(8);
+            continue;
+        }
+
+        auto now = std::chrono::steady_clock::now();
+
+        // Release jump pulse
+        if (jump_latched && (now - last_jump) >= std::chrono::milliseconds(20)) {
+            set_jump(lp.humanoid.Address, false);
+            jump_latched = false;
+        }
+
+        // Ground detection via vertical velocity + height
+        float vy = 0.f;
+        {
+            sdk::part hrp(lp.HumanoidRootPart.Address);
+            vy = get_velocity_y(hrp);
+        }
+
+        float pos_y = 0.f;
+        {
+            sdk::part hrp_pos(lp.HumanoidRootPart.Address);
+            auto pos = hrp_pos.primitive().position();
+            pos_y = pos.y;
+        }
+
+        if (!has_ground_ref) {
+            ground_ref_y = pos_y;
+            has_ground_ref = true;
+        }
+
+        // Snap ground reference when grounded
+        if (std::abs(vy) <= 1.25f && std::abs(pos_y - ground_ref_y) <= 0.75f) {
+            ground_ref_y = pos_y;
+        }
+
+        bool airborne = std::abs(vy) > 1.25f || (std::abs(pos_y - ground_ref_y) > 1.0f);
+        bool jump_held = (GetAsyncKeyState(VK_SPACE) & 0x8000) != 0;
+        bool can_jump = jump_held && !airborne && (now - last_jump) >= std::chrono::milliseconds(90);
+
+        if (can_jump) {
+            set_jump(lp.humanoid.Address, true);
+            last_jump = now;
+            jump_latched = true;
+        }
+
+        // Air-strafe with position stepping for speed
+        if (jump_held && airborne) {
+            const float speed = std::clamp(global::misc::BHop_Speed, 1.f, 500.f);
+            // Simple: just boost forward based on WASD
+            bool w = GetAsyncKeyState('W') & 0x8000;
+            bool s = GetAsyncKeyState('S') & 0x8000;
+            bool a = GetAsyncKeyState('A') & 0x8000;
+            bool d = GetAsyncKeyState('D') & 0x8000;
+
+            if (w || s || a || d) {
+                // Get camera forward/right for direction
+                if (global::camera.Address) {
+                    sdk::camera cam(global::camera.Address);
+                    auto cam_pos = cam.position();
+                    auto cam_rot = cam.rotation();
+                    auto look = lookvec(cam_rot);
+                    auto right = rightvec(cam_rot);
+
+                    sdk::vector3 dir(0, 0, 0);
+                    if (w) dir = dir + look;
+                    if (s) dir = dir - look;
+                    if (a) dir = dir - right;
+                    if (d) dir = dir + right;
+
+                    if (dir.magnitude() > 0.f)
+                        dir = dir.normalize();
+
+                    step_horizontal(lp.HumanoidRootPart, dir.x * speed, dir.z * speed, 0.03f, 4);
+                }
+            }
+        }
+    }
+}
+
+} // namespace misc
+
+// ── Noclip ────────────────────────────────────────────────────────────────────
+// Ported from fragment hacks.cpp noclip_loop — disables CanCollide on all
+// character primitives while keybind is active.
+namespace misc {
+
+void noclip()
+{
+    auto set_can_collide = [](uint64_t primitive, bool v) {
+        if (!primitive) return;
+        drive->write<bool>(primitive + offset::primitiveflag::CanCollide, v);
+    };
+
+    auto apply_noclip_state = [&](bool enable) {
+        auto& lp = global::LocalPlayer;
+        if (!lp.character.Address) return;
+
+        auto children = lp.character.children();
+        for (auto& child : children) {
+            if (!child.Address) continue;
+            sdk::part p(child.Address);
+            auto prim = p.primitive();
+            if (prim.Address)
+                set_can_collide(prim.Address, enable);
+        }
+
+        // Also explicitly handle HRP
+        if (lp.HumanoidRootPart.Address) {
+            sdk::part hrp(lp.HumanoidRootPart.Address);
+            auto prim = hrp.primitive();
+            if (prim.Address)
+                set_can_collide(prim.Address, enable);
+        }
+    };
+
+    bool last_state = false;
+
+    while (true)
+    {
+        Sleep(5);
+
+        HWND rbx = FindWindowA(nullptr, "Roblox");
+        bool focused = rbx && GetForegroundWindow() == rbx;
+
+        int vk = 0;
+        if (global::misc::Noclip_Key != ImGuiKey_None)
+            vk = misckey(global::misc::Noclip_Key);
+
+        bool key_active = focused && vk && (GetAsyncKeyState(vk) & 0x8000);
+
+        bool active = global::misc::Noclip && key_active;
+
+        if (active && global::LocalPlayer.character.Address) {
+            apply_noclip_state(false);
+            last_state = true;
+        }
+        else if (last_state) {
+            apply_noclip_state(true);
+            last_state = false;
+        }
+
+        if (!active)
+            Sleep(8);
+    }
+}
+
+} // namespace misc
+
+// ── Freeze Players ────────────────────────────────────────────────────────────
+// Ported from fragment hacks.cpp freeze_players_loop — writes to the
+// target_time_delay_factor FFlag to freeze all player physics.
+namespace misc {
+
+void freeze_players()
+{
+    const int freeze_value = -999999999;
+    const int normal_value = 20;
+    bool last_state = false;
+
+    while (true)
+    {
+        Sleep(50);
+
+        HWND rbx = FindWindowA(nullptr, "Roblox");
+        bool focused = rbx && GetForegroundWindow() == rbx;
+
+        int vk = 0;
+        if (global::misc::Freeze_Key != ImGuiKey_None)
+            vk = misckey(global::misc::Freeze_Key);
+
+        bool key_active = focused && vk && (GetAsyncKeyState(vk) & 0x8000);
+        bool freeze_active = global::misc::FreezePlayers && key_active;
+
+        uintptr_t base = drive->modulebase();
+        uintptr_t ff_offset = offset::fflags::target_time_delay_facctor_tenths;
+
+        if (base && ff_offset && freeze_active != last_state) {
+            int value = freeze_active ? freeze_value : normal_value;
+            drive->write<int>(base + ff_offset, value);
+            last_state = freeze_active;
+        }
+    }
+}
+
+} // namespace misc
+
+// ── Console ───────────────────────────────────────────────────────────────────
+// Simple ImGui console window toggled with backtick (`).
+// Supports basic commands: toggle, set, help, status, clear.
+namespace console {
+
+struct console_line {
+    enum type_t { info, success, warning, error } type;
+    std::string text;
+};
+
+static std::vector<console_line> s_lines;
+static char s_input_buf[512] = "";
+static bool s_open = false;
+static int s_console_key_state = 0;
+
+bool is_open() { return s_open; }
+void toggle() { s_open = !s_open; }
+
+static void add_line(console_line::type_t t, const char* fmt, ...)
+{
+    char buf[512];
+    va_list args;
+    va_start(args, fmt);
+    vsnprintf(buf, sizeof(buf), fmt, args);
+    va_end(args);
+    s_lines.push_back({ t, buf });
+    if (s_lines.size() > 256)
+        s_lines.erase(s_lines.begin());
+}
+
+static void execute_command(const char* cmd)
+{
+    if (!cmd || !cmd[0]) return;
+
+    std::string input(cmd);
+    // trim
+    while (!input.empty() && input.front() == ' ') input.erase(input.begin());
+    while (!input.empty() && input.back() == ' ') input.pop_back();
+    if (input.empty()) return;
+
+    add_line(console_line::info, "> %s", input.c_str());
+
+    // Split into tokens
+    std::vector<std::string> tokens;
+    std::istringstream iss(input);
+    std::string tok;
+    while (iss >> tok) tokens.push_back(tok);
+    if (tokens.empty()) return;
+
+    const std::string& cmd_name = tokens[0];
+
+    if (cmd_name == "help" || cmd_name == "h") {
+        add_line(console_line::info, "Commands:");
+        add_line(console_line::info, "  toggle <feature>  - Toggle a feature on/off");
+        add_line(console_line::info, "  status            - Show active features");
+        add_line(console_line::info, "  clear             - Clear console");
+        add_line(console_line::info, "  help              - Show this help");
+        return;
+    }
+
+    if (cmd_name == "clear" || cmd_name == "cls") {
+        s_lines.clear();
+        return;
+    }
+
+    if (cmd_name == "status") {
+        add_line(console_line::info, "Fly: %s  Walkspeed: %s  BHop: %s",
+            global::misc::fly ? "ON" : "off",
+            global::misc::walkspeed ? "ON" : "off",
+            global::misc::BHop ? "ON" : "off");
+        add_line(console_line::info, "Noclip: %s  Desync: %s  Freeze: %s",
+            global::misc::Noclip ? "ON" : "off",
+            global::misc::Desync ? "ON" : "off",
+            global::misc::FreezePlayers ? "ON" : "off");
+        add_line(console_line::info, "Tickrate: %s  Hitbox: %s  AnimChanger: %s",
+            global::misc::Tickrate ? "ON" : "off",
+            global::misc::hitbox ? "ON" : "off",
+            global::misc::AnimChanger ? "ON" : "off");
+        add_line(console_line::info, "ESP: %s  Aimbot: %s  Silent: %s",
+            global::esp::Enabled ? "ON" : "off",
+            global::aimbot::Enabled ? "ON" : "off",
+            global::silent::Enabled ? "ON" : "off");
+        return;
+    }
+
+    if (cmd_name == "toggle" && tokens.size() >= 2) {
+        const std::string& feat = tokens[1];
+
+        auto do_toggle = [&](const char* name, bool& val) {
+            val = !val;
+            add_line(console_line::success, "%s -> %s", name, val ? "ON" : "OFF");
+        };
+
+        if (feat == "fly")              do_toggle("Fly", global::misc::fly);
+        else if (feat == "walkspeed")   do_toggle("Walkspeed", global::misc::walkspeed);
+        else if (feat == "hitbox")      do_toggle("Hitbox", global::misc::hitbox);
+        else if (feat == "desync")      do_toggle("Desync", global::misc::Desync);
+        else if (feat == "bhop")        do_toggle("BHop", global::misc::BHop);
+        else if (feat == "noclip")      do_toggle("Noclip", global::misc::Noclip);
+        else if (feat == "freeze")      do_toggle("Freeze", global::misc::FreezePlayers);
+        else if (feat == "tickrate")    do_toggle("Tickrate", global::misc::Tickrate);
+        else if (feat == "esp")         do_toggle("ESP", global::esp::Enabled);
+        else if (feat == "aimbot")      do_toggle("Aimbot", global::aimbot::Enabled);
+        else if (feat == "silent")      do_toggle("Silent", global::silent::Enabled);
+        else if (feat == "anim")        do_toggle("AnimChanger", global::misc::AnimChanger);
+        else if (feat == "lighting")    do_toggle("Lighting", global::misc::Lighting);
+        else if (feat == "clock")       do_toggle("ClockTime", global::misc::ClockTime);
+        else {
+            add_line(console_line::warning, "Unknown feature: %s", feat.c_str());
+        }
+        return;
+    }
+
+    add_line(console_line::warning, "Unknown command: %s (try 'help')", cmd_name.c_str());
+}
+
+void render()
+{
+    // Backtick toggle
+    {
+        HWND rbx = FindWindowA(nullptr, "Roblox");
+        bool focused = rbx && GetForegroundWindow() == rbx;
+        bool backtick = (GetAsyncKeyState(VK_OEM_3) & 1) != 0; // ` key
+        if (focused && backtick) {
+            s_open = !s_open;
+        }
+    }
+
+    if (!s_open) return;
+
+    ImGui::SetNextWindowSize(ImVec2(520, 340), ImGuiCond_FirstUseEver);
+    ImGui::SetNextWindowPos(ImVec2(200, 120), ImGuiCond_FirstUseEver);
+
+    ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.06f, 0.06f, 0.08f, 0.94f));
+    ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(0.4f, 0.8f, 0.2f, 0.5f));
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(8, 8));
+    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(4, 4));
+
+    if (ImGui::Begin("Console##main_console", &s_open,
+        ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoCollapse))
+    {
+        // Output region
+        ImGui::BeginChild("##console_output", ImVec2(0, -ImGui::GetFrameHeightWithSpacing() - 4), true);
+        for (auto& line : s_lines) {
+            ImVec4 col;
+            switch (line.type) {
+            case console_line::info:    col = ImVec4(0.8f, 0.8f, 0.8f, 1.f); break;
+            case console_line::success: col = ImVec4(0.4f, 0.9f, 0.5f, 1.f); break;
+            case console_line::warning: col = ImVec4(1.f, 0.85f, 0.3f, 1.f); break;
+            case console_line::error:   col = ImVec4(1.f, 0.3f, 0.3f, 1.f); break;
+            }
+            ImGui::PushStyleColor(ImGuiCol_Text, col);
+            ImGui::TextUnformatted(line.text.c_str());
+            ImGui::PopStyleColor();
+        }
+        if (ImGui::GetScrollY() >= ImGui::GetScrollMaxY())
+            ImGui::SetScrollHereY(1.0f);
+        ImGui::EndChild();
+
+        // Input
+        ImGui::PushItemWidth(-1);
+        bool enter = ImGui::InputText("##console_input", s_input_buf, sizeof(s_input_buf),
+            ImGuiInputTextFlags_EnterReturnsTrue);
+        ImGui::PopItemWidth();
+
+        if (enter) {
+            execute_command(s_input_buf);
+            s_input_buf[0] = '\0';
+        }
+
+        // Focus input on open
+        if (ImGui::IsWindowAppearing())
+            ImGui::SetKeyboardFocusHere();
+    }
+    ImGui::End();
+
+    ImGui::PopStyleVar(2);
+    ImGui::PopStyleColor(2);
+}
+
+} // namespace console
+
 // Real run() — all functions visible here
 namespace misc {
     void run()
@@ -715,5 +1149,8 @@ namespace misc {
         std::thread(tickrate).detach();
         std::thread(anim_changer).detach();
         std::thread(lighting).detach();
+        std::thread(bhop).detach();
+        std::thread(noclip).detach();
+        std::thread(freeze_players).detach();
     }
 }

@@ -535,6 +535,16 @@ namespace datamodel {
     static constexpr uintptr_t ToRenderView2  = offsets::DataModelToRenderView2;
     static constexpr uintptr_t ToRenderView3  = offsets::DataModelToRenderView3;
 }
+namespace fflags {
+    inline constexpr uintptr_t target_time_delay_facctor_tenths = 0x6B1CBA8;
+}
+namespace replicator {
+    inline constexpr uintptr_t nextgen_replicator = 0x7B48E88;
+}
+namespace renderview {
+    inline constexpr uintptr_t force_flag_byte = 0x150;
+    inline constexpr uintptr_t force_flag_bool = 0x28d;
+}
 namespace workspace { static constexpr uintptr_t world = offsets::World; }
 namespace world {
     static constexpr uintptr_t Gravity         = offsets::Gravity;

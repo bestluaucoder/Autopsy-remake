@@ -204,6 +204,34 @@ namespace global {
 		inline ImGuiKey Desync_Key = ImGuiKey_None;
 		inline ImKeyBindMode Desync_Mode = ImKeyBindMode_Hold;
 
+		// BHop (from fragment)
+		inline bool BHop = false;
+		inline ImGuiKey BHop_Key = ImGuiKey_None;
+		inline ImKeyBindMode BHop_Mode = ImKeyBindMode_Hold;
+		inline float BHop_Speed = 32.f;
+
+		// Noclip
+		inline bool Noclip = false;
+		inline ImGuiKey Noclip_Key = ImGuiKey_None;
+		inline ImKeyBindMode Noclip_Mode = ImKeyBindMode_Hold;
+
+		// Freeze Players (FFlag exploit from fragment)
+		inline bool FreezePlayers = false;
+		inline ImGuiKey Freeze_Key = ImGuiKey_None;
+		inline ImKeyBindMode Freeze_Mode = ImKeyBindMode_Hold;
+
+		// Better lighting overrides (skybox presets from fragment)
+		inline bool LightBrightness  = false;
+		inline float BrightnessVal   = 1.f;
+		inline bool LightFog         = false;
+		inline float FogStart        = 0.f;
+		inline float FogEnd          = 1000.f;
+		inline float FogColor[3]     = { 0.75f, 0.75f, 0.75f };
+		inline bool SkyboxPreset     = false;
+		inline int  SkyboxIdx        = 0; // 0=Default 1=Aurora Blue 2=Nebula 3=Realistic 4=Dark
+		inline bool ExposureOverride = false;
+		inline float ExposureVal     = 0.f;
+
 		// Tickrate
 		inline bool  Tickrate         = false;
 		inline ImGuiKey Tickrate_Key  = ImGuiKey_None;

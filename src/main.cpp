@@ -298,6 +298,7 @@ std::int32_t main(std::int32_t argc, char** argv[])
         screen->begin();
         screen->visual();
         screen->menu();
+        console::render();
         screen->end();
     }
 

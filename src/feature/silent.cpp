@@ -207,6 +207,57 @@ static sdk::vector3 linearvelocity(const sdk::instance& PartInst)
     return drive->read<sdk::vector3>(primitive.Address + offset::primitive::AssemblyLinearVelocity);
 }
 
+// ── Ballistic prediction (ported from fragment free_aim.cpp) ─────────────────
+static float compute_ballistic_offset(float distance, float div_y, float max_distance)
+{
+    constexpr float min_start = 140.0f;
+    constexpr float max_offset = 25.0f;
+    float end = max_distance > 0.0f ? max_distance : 800.0f;
+    end = std::clamp(end, 600.0f, 900.0f);
+    const float start = std::fmaxf(min_start, end * 0.25f);
+    float t = std::clamp((distance - start) / (end - start), 0.0f, 1.0f);
+    t = std::pow(t, 1.15f);
+    const float scale = 0.16f / div_y;
+    const float offset = distance * scale * t;
+    return std::clamp(offset, 0.0f, max_offset);
+}
+
+static float compute_head_bias(float distance)
+{
+    constexpr float near_bias = 0.35f;
+    constexpr float far_bias = 0.95f;
+    if (distance <= 0.0f)
+        return 0.55f;
+    const float t = std::clamp((distance - 100.0f) / 700.0f, 0.0f, 1.0f);
+    return near_bias + (far_bias - near_bias) * t;
+}
+
+static void compute_ballistic_dividers(float distance, float& out_div_xz, float& out_div_y)
+{
+    constexpr float base_distance = 500.0f;
+    constexpr float min_distance = 60.0f;
+    constexpr float base_div_xz = 3.5f;
+    constexpr float base_div_y = 12.0f;
+    constexpr float min_div_xz = 2.0f;
+    constexpr float min_div_y = 7.0f;
+    constexpr float max_div = 50.0f;
+
+    const float clamped = std::fmaxf(distance, min_distance);
+    const float scale = base_distance / clamped;
+    out_div_xz = base_div_xz * scale;
+    out_div_y = base_div_y * scale;
+
+    constexpr float far_start = 600.0f;
+    constexpr float far_end = 1400.0f;
+    const float t = std::clamp((clamped - far_start) / (far_end - far_start), 0.0f, 1.0f);
+    const float boost = 1.0f - 0.12f * t;
+    out_div_xz *= boost;
+    out_div_y *= boost;
+
+    out_div_xz = std::clamp(out_div_xz, min_div_xz, max_div);
+    out_div_y = std::clamp(out_div_y, min_div_y, max_div);
+}
+
 static sdk::vector3 silentprediction(const sdk::instance& PartInst, const sdk::vector3& Position)
 {
     if (!global::silent::Prediction)
@@ -222,10 +273,22 @@ static sdk::vector3 silentprediction(const sdk::instance& PartInst, const sdk::v
         if (global::camera.Address)
             Distance = global::camera.position().distance(Position);
 
-        const float SpeedTerm = clampf(Velocity.magnitude() / 2200.f, 0.f, .045f);
-        const float DistanceTerm = clampf(Distance / 9500.f, .018f, .185f);
-        const float Factor = DistanceTerm + SpeedTerm;
-        return Position + Velocity * Factor;
+        float div_xz = std::fmaxf(0.001f, clampf(Velocity.magnitude() / 2200.f, 0.f, .045f));
+        float div_y = 12.0f;
+
+        compute_ballistic_dividers(Distance, div_xz, div_y);
+
+        sdk::vector3 offset{};
+        offset.x = Velocity.x / std::fmaxf(div_xz, 0.001f);
+        offset.z = Velocity.z / std::fmaxf(div_xz, 0.001f);
+        offset.y = Velocity.y / std::fmaxf(div_y, 0.001f);
+
+        if (Distance > 0.01f)
+            offset.y += compute_ballistic_offset(Distance, div_y, 800.0f);
+
+        offset.y += compute_head_bias(Distance);
+
+        return Position + offset;
     }
 
     return {
