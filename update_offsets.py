@@ -1,35 +1,23 @@
 #!/usr/bin/env python3
 """
 RBX External - Automatic Offset Updater
-Fetches latest offsets from rbxoffsets.xyz API
+Fetches from https://offsets.imtheo.lol/offsets.json
 """
 
-import requests
-import re
+import json
 import sys
+import re
 from pathlib import Path
 
-API_BASE    = "https://rbxoffsets.xyz"
-HEADERS     = {"rbxoffsets.xyz": "apiv1"}
+try:
+    import requests
+except ImportError:
+    import subprocess
+    subprocess.check_call([sys.executable, "-m", "pip", "install", "requests", "-q"])
+    import requests
+
+OFFSETS_URL = "https://offsets.imtheo.lol/offsets.json"
 OFFSET_FILE = Path("src/engine/offset.h")
-
-
-def get_latest_version():
-    try:
-        r = requests.get(f"{API_BASE}/api/version/raw", headers=HEADERS, timeout=10)
-        return r.text.strip() if r.status_code == 200 else None
-    except Exception as e:
-        print(f"[-] Error fetching version: {e}")
-        return None
-
-
-def get_latest_offsets():
-    try:
-        r = requests.get(f"{API_BASE}/api/latest/raw", headers=HEADERS, timeout=10)
-        return r.text if r.status_code == 200 else None
-    except Exception as e:
-        print(f"[-] Error fetching offsets: {e}")
-        return None
 
 
 def get_current_version():
@@ -38,224 +26,288 @@ def get_current_version():
         m = re.search(r'ClientVersion\s*=\s*"([^"]+)"', content)
         return m.group(1) if m else None
     except Exception as e:
-        print(f"[-] Error reading current version: {e}")
+        print(f"[-] Error reading offset.h: {e}")
         return None
 
 
-def get_compat_shims():
-    """Compatibility namespace shims — maps old nested namespaces to the new flat layout."""
-    return r"""
+def fetch_offsets():
+    try:
+        r = requests.get(OFFSETS_URL, timeout=15)
+        r.raise_for_status()
+        return r.json()
+    except Exception as e:
+        print(f"[-] Error fetching offsets: {e}")
+        return None
+
+
+def flatten_offsets(data: dict) -> dict[str, int]:
+    """
+    Flatten nested offset JSON into a single name->value dict.
+    e.g. {"Humanoid": {"Health": 0x188}} -> {"HumanoidHealth": 0x188}
+    Also handles top-level single values: {"WorldGravity": 0x210}
+    """
+    flat = {}
+    offsets_obj = data.get("Offsets", data)
+    for key, val in offsets_obj.items():
+        if isinstance(val, dict):
+            for subkey, subval in val.items():
+                if isinstance(subval, (int, float)):
+                    # e.g. Humanoid + Health -> HumanoidHealth
+                    flat_name = key + subkey if subkey not in key else subkey
+                    flat[flat_name] = int(subval)
+        elif isinstance(val, (int, float)):
+            flat[key] = int(val)
+    return flat
+
+
+def build_flat_namespace(flat: dict[str, int]) -> str:
+    lines = ["namespace offsets {"]
+    for name, val in sorted(flat.items()):
+        lines.append(f"    inline constexpr uintptr_t {name} = 0x{val:x};")
+    lines.append("}")
+    return "\n".join(lines)
+
+
+def get_compat_shims(flat: dict[str, int]) -> str:
+    """
+    Build compatibility shims mapping old nested namespace references
+    to the new flat offsets:: names. Looks up actual values from flat dict
+    so missing offsets get a 0 fallback with a comment rather than a compile error.
+    """
+    def ref(name):
+        if name in flat:
+            return f"offsets::{name}"
+        # Try common naming variations
+        for candidate in flat:
+            if candidate.lower() == name.lower():
+                return f"offsets::{candidate}"
+        return f"0x0 /* {name} not found in this version */"
+
+    # Build lookup from flat keys (lowercase) for fuzzy matching
+    flat_lower = {k.lower(): k for k in flat}
+    def fuzzy(name):
+        key = name.lower()
+        if key in flat_lower:
+            return f"offsets::{flat_lower[key]}"
+        return f"0x0 /* {name} */"
+
+    return f"""
 // ─── Compatibility shims ─────────────────────────────────────────────────────
-namespace fakemodel {
-    static constexpr uintptr_t Pointer       = offsets::FakeDataModelPointer;
-    static constexpr uintptr_t RealDataModel = offsets::FakeDataModelToDataModel;
-}
-namespace render {
-    static constexpr uintptr_t Pointer    = offsets::VisualEnginePointer;
-    static constexpr uintptr_t Dimensions = offsets::Dimensions;
-    static constexpr uintptr_t ViewMatrix = offsets::viewmatrix;
-}
-namespace view {
-    static constexpr uintptr_t DeviceD3D11   = offsets::DeviceD3D11;
-    static constexpr uintptr_t LightingValid = offsets::LightingValid;
-    static constexpr uintptr_t SkyValid      = offsets::SkyValid;
-    static constexpr uintptr_t render        = offsets::VisualEngine;
-}
-namespace camera {
-    static constexpr uintptr_t Position        = offsets::CameraPos;
-    static constexpr uintptr_t Rotation        = offsets::CameraRotation;
-    static constexpr uintptr_t FieldOfView     = offsets::FOV;
-    static constexpr uintptr_t Viewport        = offsets::CameraViewport;
-    static constexpr uintptr_t ViewportSize    = offsets::ViewportSize;
-    static constexpr uintptr_t CameraSubject   = offsets::CameraSubject;
-    static constexpr uintptr_t CameraType      = offsets::CameraType;
-    static constexpr uintptr_t ImagePlaneDepth = offsets::CameraImagePlaneDepth;
-}
-namespace player {
-    static constexpr uintptr_t UserId        = offsets::UserId;
-    static constexpr uintptr_t LocalPlayer   = offsets::LocalPlayer;
-    static constexpr uintptr_t ModelInstance = offsets::ModelInstance;
-    static constexpr uintptr_t DisplayName   = offsets::DisplayName;
-    static constexpr uintptr_t team          = offsets::Team;
-    static constexpr uintptr_t TeamColor     = offsets::TeamColor;
-    static constexpr uintptr_t CameraMode    = offsets::CameraMode;
-    static constexpr uintptr_t mouse         = offsets::PlayerMouse;
-    static constexpr uintptr_t AccountAge    = offsets::AccountAge;
-    static constexpr uintptr_t LocaleId      = offsets::LocaleId;
-}
-namespace humanoid {
-    static constexpr uintptr_t Health           = offsets::Health;
-    static constexpr uintptr_t MaxHealth        = offsets::MaxHealth;
-    static constexpr uintptr_t walkspeed        = offsets::WalkSpeed;
-    static constexpr uintptr_t WalkspeedCheck   = offsets::WalkSpeedCheck;
-    static constexpr uintptr_t RigType          = offsets::RigType;
-    static constexpr uintptr_t PlatformStand    = offsets::PlatformStand;
-    static constexpr uintptr_t HumanoidRootPart = offsets::HumanoidRootPartRef;
-    static constexpr uintptr_t HumanoidState    = offsets::HumanoidState;
-    static constexpr uintptr_t HumanoidStateID  = offsets::HumanoidStateId;
-    static constexpr uintptr_t Jump             = offsets::Jump;
-    static constexpr uintptr_t JumpPower        = offsets::JumpPower;
-    static constexpr uintptr_t JumpHeight       = offsets::JumpHeight;
-    static constexpr uintptr_t HipHeight        = offsets::HipHeight;
-    static constexpr uintptr_t AutoJumpEnabled  = offsets::AutoJumpEnabled;
-    static constexpr uintptr_t SeatPart         = offsets::SeatPart;
-    static constexpr uintptr_t CameraOffset     = offsets::CameraOffset;
-    static constexpr uintptr_t IsWalking        = offsets::IsWalking;
-}
-namespace primitive {
-    static constexpr uintptr_t Position                = offsets::Position;
-    static constexpr uintptr_t Rotation                = offsets::CFrame;
-    static constexpr uintptr_t Size                    = offsets::PartSize;
-    static constexpr uintptr_t AssemblyLinearVelocity  = offsets::PrimitiveAssemblyLinearVelocity;
-    static constexpr uintptr_t AssemblyAngularVelocity = offsets::PrimitiveAssemblyAngularVelocity;
-    static constexpr uintptr_t Owner                   = offsets::PrimitiveOwner;
-    static constexpr uintptr_t Flags                   = offsets::PrimitiveFlags;
-    static constexpr uintptr_t Material                = offsets::MaterialType;
-    static constexpr uintptr_t Validate                = offsets::ValidatePrimitive;
-}
-namespace primitiveflag {
-    static constexpr uintptr_t Anchored   = offsets::Anchored;
-    static constexpr uintptr_t CanCollide = offsets::CanCollide;
-    static constexpr uintptr_t CanQuery   = offsets::CanQuery;
-    static constexpr uintptr_t CanTouch   = offsets::CanTouch;
-}
-namespace basepart {
-    static constexpr uintptr_t primitive    = offsets::Primitive;
-    static constexpr uintptr_t Transparency = offsets::Transparency;
-    static constexpr uintptr_t Color3       = offsets::Color3;
-    static constexpr uintptr_t CastShadow   = offsets::BasePartCastShadow;
-    static constexpr uintptr_t Locked       = offsets::BasePartLocked;
-    static constexpr uintptr_t Massless     = offsets::BasePartMassless;
-    static constexpr uintptr_t Reflectance  = offsets::BasePartReflectance;
-    static constexpr uintptr_t Shape        = offsets::Shape;
-}
-namespace meshpart {
-    static constexpr uintptr_t MeshId  = offsets::MeshId;
-    static constexpr uintptr_t Texture = offsets::MeshPartTexture;
-}
-namespace instance {
-    static constexpr uintptr_t name            = offsets::Name;
-    static constexpr uintptr_t parent          = offsets::Parent;
-    static constexpr uintptr_t ChildrenStart   = offsets::Children;
-    static constexpr uintptr_t ChildrenEnd     = offsets::ChildrenEnd;
-    static constexpr uintptr_t ClassDescriptor = offsets::ClassDescriptor;
-    static constexpr uintptr_t ClassBase       = offsets::ClassBase;
-    static constexpr uintptr_t This            = offsets::This;
-}
-namespace gui {
-    static constexpr uintptr_t Size                   = offsets::GuiSize;
-    static constexpr uintptr_t Position               = offsets::GuiPosition;
-    static constexpr uintptr_t text                   = offsets::TextLabelText;
-    static constexpr uintptr_t Visible                = offsets::TextLabelVisible;
-    static constexpr uintptr_t ZIndex                 = offsets::ZIndex;
-    static constexpr uintptr_t LayoutOrder            = offsets::LayoutOrder;
-    static constexpr uintptr_t RichText               = offsets::RichText;
-    static constexpr uintptr_t Image                  = offsets::Image;
-    static constexpr uintptr_t TextColor3             = offsets::TextColor3;
-    static constexpr uintptr_t ScreenGui_Enabled      = offsets::ScreenGui_Enabled;
-    static constexpr uintptr_t BackgroundColor3       = offsets::BackgroundColor3;
-    static constexpr uintptr_t BackgroundTransparency = offsets::BackgroundTransparency;
-}
-namespace datamodel {
-    static constexpr uintptr_t PlaceId        = offsets::PlaceId;
-    static constexpr uintptr_t GameId         = offsets::GameId;
-    static constexpr uintptr_t CreatorId      = offsets::CreatorId;
-    static constexpr uintptr_t ServerIP       = offsets::ServerIP;
-    static constexpr uintptr_t workspace      = offsets::Workspace;
-    static constexpr uintptr_t scriptcontext  = offsets::ScriptContext;
-    static constexpr uintptr_t GameLoaded     = offsets::GameLoaded;
-    static constexpr uintptr_t JobId          = offsets::JobId;
-    static constexpr uintptr_t PlaceVersion   = offsets::PlaceVersion;
-    static constexpr uintptr_t PrimitiveCount = offsets::DataModelPrimitiveCount;
-    static constexpr uintptr_t ToRenderView1  = offsets::DataModelToRenderView1;
-    static constexpr uintptr_t ToRenderView2  = offsets::DataModelToRenderView2;
-    static constexpr uintptr_t ToRenderView3  = offsets::DataModelToRenderView3;
-}
-namespace workspace { static constexpr uintptr_t world = offsets::World; }
-namespace world {
-    static constexpr uintptr_t Gravity         = offsets::Gravity;
-    static constexpr uintptr_t ReadOnlyGravity  = offsets::ReadOnlyGravity;
-}
-namespace light {
-    static constexpr uintptr_t Ambient               = offsets::LightingAmbient;
-    static constexpr uintptr_t OutdoorAmbient        = offsets::OutdoorAmbient;
-    static constexpr uintptr_t Brightness            = offsets::LightingBrightness;
-    static constexpr uintptr_t ClockTime             = offsets::ClockTime;
-    static constexpr uintptr_t LightColor            = offsets::LightColor;
-    static constexpr uintptr_t LightDirection        = offsets::LightDirection;
-    static constexpr uintptr_t SunPosition           = offsets::SunPosition;
-    static constexpr uintptr_t MoonPosition          = offsets::MoonPosition;
-    static constexpr uintptr_t FogEnd                = offsets::FogEnd;
-    static constexpr uintptr_t FogStart              = offsets::FogStart;
-    static constexpr uintptr_t FogColor              = offsets::FogColor;
-    static constexpr uintptr_t ExposureCompensation  = offsets::ExposureCompensation;
-    static constexpr uintptr_t GlobalShadows         = offsets::GlobalShadows;
-    static constexpr uintptr_t ColorShift_Top        = offsets::ColorShift_Top;
-    static constexpr uintptr_t ColorShift_Bottom     = offsets::ColorShift_Bottom;
-    static constexpr uintptr_t GeographicLatitude    = offsets::GeographicLatitude;
-    static constexpr uintptr_t EnvironmentDiffuseScale  = offsets::EnvironmentDiffuseScale;
-    static constexpr uintptr_t EnvironmentSpecularScale = offsets::EnvironmentSpecularScale;
-    static constexpr uintptr_t sky                   = offsets::Sky;
-}
-namespace mouseservice {
-    static constexpr uintptr_t InputObject        = offsets::InputObject;
-    static constexpr uintptr_t InputObject2       = offsets::InputObject;
-    static constexpr uintptr_t MousePosition      = offsets::MousePosition;
-    static constexpr uintptr_t SensitivityPointer = offsets::MouseSensitivity;
-}
-namespace misc {
-    static constexpr uintptr_t Value        = offsets::Value;
-    static constexpr uintptr_t AnimationId  = offsets::AnimationId;
-    static constexpr uintptr_t StringLength = offsets::StringLength;
-    static constexpr uintptr_t Adornee      = offsets::Adornee;
-}
-namespace silent {
+// Maps old nested offset namespaces to the new flat offsets:: layout.
+// Auto-generated by update_offsets.py — do not edit manually.
+
+namespace fakemodel {{
+    static constexpr uintptr_t Pointer       = {fuzzy("FakeDataModelPointer")};
+    static constexpr uintptr_t RealDataModel = {fuzzy("FakeDataModelToDataModel")};
+}}
+namespace render {{
+    static constexpr uintptr_t Pointer    = {fuzzy("VisualEnginePointer")};
+    static constexpr uintptr_t Dimensions = {fuzzy("Dimensions")};
+    static constexpr uintptr_t ViewMatrix = {fuzzy("viewmatrix")};
+}}
+namespace view {{
+    static constexpr uintptr_t DeviceD3D11   = {fuzzy("DeviceD3D11")};
+    static constexpr uintptr_t LightingValid = {fuzzy("LightingValid")};
+    static constexpr uintptr_t SkyValid      = {fuzzy("SkyValid")};
+    static constexpr uintptr_t render        = {fuzzy("VisualEngine")};
+}}
+namespace camera {{
+    static constexpr uintptr_t Position        = {fuzzy("CameraPos")};
+    static constexpr uintptr_t Rotation        = {fuzzy("CameraRotation")};
+    static constexpr uintptr_t FieldOfView     = {fuzzy("FOV")};
+    static constexpr uintptr_t Viewport        = {fuzzy("CameraViewport")};
+    static constexpr uintptr_t ViewportSize    = {fuzzy("ViewportSize")};
+    static constexpr uintptr_t CameraSubject   = {fuzzy("CameraSubject")};
+    static constexpr uintptr_t CameraType      = {fuzzy("CameraType")};
+    static constexpr uintptr_t ImagePlaneDepth = {fuzzy("CameraImagePlaneDepth")};
+}}
+namespace player {{
+    static constexpr uintptr_t UserId        = {fuzzy("UserId")};
+    static constexpr uintptr_t LocalPlayer   = {fuzzy("LocalPlayer")};
+    static constexpr uintptr_t ModelInstance = {fuzzy("ModelInstance")};
+    static constexpr uintptr_t DisplayName   = {fuzzy("DisplayName")};
+    static constexpr uintptr_t team          = {fuzzy("Team")};
+    static constexpr uintptr_t TeamColor     = {fuzzy("TeamColor")};
+    static constexpr uintptr_t CameraMode    = {fuzzy("CameraMode")};
+    static constexpr uintptr_t mouse         = {fuzzy("PlayerMouse")};
+    static constexpr uintptr_t AccountAge    = {fuzzy("AccountAge")};
+    static constexpr uintptr_t LocaleId      = {fuzzy("LocaleId")};
+}}
+namespace humanoid {{
+    static constexpr uintptr_t Health           = {fuzzy("Health")};
+    static constexpr uintptr_t MaxHealth        = {fuzzy("MaxHealth")};
+    static constexpr uintptr_t walkspeed        = {fuzzy("WalkSpeed")};
+    static constexpr uintptr_t WalkspeedCheck   = {fuzzy("WalkSpeedCheck")};
+    static constexpr uintptr_t RigType          = {fuzzy("RigType")};
+    static constexpr uintptr_t PlatformStand    = {fuzzy("PlatformStand")};
+    static constexpr uintptr_t HumanoidRootPart = {fuzzy("HumanoidRootPartRef")};
+    static constexpr uintptr_t HumanoidState    = {fuzzy("HumanoidState")};
+    static constexpr uintptr_t HumanoidStateID  = {fuzzy("HumanoidStateId")};
+    static constexpr uintptr_t Jump             = {fuzzy("Jump")};
+    static constexpr uintptr_t JumpPower        = {fuzzy("JumpPower")};
+    static constexpr uintptr_t JumpHeight       = {fuzzy("JumpHeight")};
+    static constexpr uintptr_t HipHeight        = {fuzzy("HipHeight")};
+    static constexpr uintptr_t AutoJumpEnabled  = {fuzzy("AutoJumpEnabled")};
+    static constexpr uintptr_t SeatPart         = {fuzzy("SeatPart")};
+    static constexpr uintptr_t CameraOffset     = {fuzzy("CameraOffset")};
+    static constexpr uintptr_t IsWalking        = {fuzzy("IsWalking")};
+}}
+namespace primitive {{
+    static constexpr uintptr_t Position                = {fuzzy("Position")};
+    static constexpr uintptr_t Rotation                = {fuzzy("CFrame")};
+    static constexpr uintptr_t Size                    = {fuzzy("PartSize")};
+    static constexpr uintptr_t AssemblyLinearVelocity  = {fuzzy("PrimitiveAssemblyLinearVelocity")};
+    static constexpr uintptr_t AssemblyAngularVelocity = {fuzzy("PrimitiveAssemblyAngularVelocity")};
+    static constexpr uintptr_t Owner                   = {fuzzy("PrimitiveOwner")};
+    static constexpr uintptr_t Flags                   = {fuzzy("PrimitiveFlags")};
+    static constexpr uintptr_t Material                = {fuzzy("MaterialType")};
+    static constexpr uintptr_t Validate                = {fuzzy("ValidatePrimitive")};
+}}
+namespace primitiveflag {{
+    static constexpr uintptr_t Anchored   = {fuzzy("Anchored")};
+    static constexpr uintptr_t CanCollide = {fuzzy("CanCollide")};
+    static constexpr uintptr_t CanQuery   = {fuzzy("CanQuery")};
+    static constexpr uintptr_t CanTouch   = {fuzzy("CanTouch")};
+}}
+namespace basepart {{
+    static constexpr uintptr_t primitive    = {fuzzy("Primitive")};
+    static constexpr uintptr_t Transparency = {fuzzy("Transparency")};
+    static constexpr uintptr_t Color3       = {fuzzy("Color3")};
+    static constexpr uintptr_t CastShadow   = {fuzzy("BasePartCastShadow")};
+    static constexpr uintptr_t Locked       = {fuzzy("BasePartLocked")};
+    static constexpr uintptr_t Massless     = {fuzzy("BasePartMassless")};
+    static constexpr uintptr_t Reflectance  = {fuzzy("BasePartReflectance")};
+    static constexpr uintptr_t Shape        = {fuzzy("Shape")};
+}}
+namespace meshpart {{
+    static constexpr uintptr_t MeshId  = {fuzzy("MeshId")};
+    static constexpr uintptr_t Texture = {fuzzy("MeshPartTexture")};
+}}
+namespace instance {{
+    static constexpr uintptr_t name            = {fuzzy("Name")};
+    static constexpr uintptr_t parent          = {fuzzy("Parent")};
+    static constexpr uintptr_t ChildrenStart   = {fuzzy("Children")};
+    static constexpr uintptr_t ChildrenEnd     = {fuzzy("ChildrenEnd")};
+    static constexpr uintptr_t ClassDescriptor = {fuzzy("ClassDescriptor")};
+    static constexpr uintptr_t ClassBase       = {fuzzy("ClassBase")};
+    static constexpr uintptr_t This            = {fuzzy("This")};
+}}
+namespace gui {{
+    static constexpr uintptr_t Size                   = {fuzzy("GuiSize")};
+    static constexpr uintptr_t Position               = {fuzzy("GuiPosition")};
+    static constexpr uintptr_t text                   = {fuzzy("TextLabelText")};
+    static constexpr uintptr_t Visible                = {fuzzy("TextLabelVisible")};
+    static constexpr uintptr_t ZIndex                 = {fuzzy("ZIndex")};
+    static constexpr uintptr_t LayoutOrder            = {fuzzy("LayoutOrder")};
+    static constexpr uintptr_t RichText               = {fuzzy("RichText")};
+    static constexpr uintptr_t Image                  = {fuzzy("Image")};
+    static constexpr uintptr_t TextColor3             = {fuzzy("TextColor3")};
+    static constexpr uintptr_t ScreenGui_Enabled      = {fuzzy("ScreenGui_Enabled")};
+    static constexpr uintptr_t BackgroundColor3       = {fuzzy("BackgroundColor3")};
+    static constexpr uintptr_t BackgroundTransparency = {fuzzy("BackgroundTransparency")};
+}}
+namespace datamodel {{
+    static constexpr uintptr_t PlaceId        = {fuzzy("PlaceId")};
+    static constexpr uintptr_t GameId         = {fuzzy("GameId")};
+    static constexpr uintptr_t CreatorId      = {fuzzy("CreatorId")};
+    static constexpr uintptr_t ServerIP       = {fuzzy("ServerIP")};
+    static constexpr uintptr_t workspace      = {fuzzy("Workspace")};
+    static constexpr uintptr_t scriptcontext  = {fuzzy("ScriptContext")};
+    static constexpr uintptr_t GameLoaded     = {fuzzy("GameLoaded")};
+    static constexpr uintptr_t JobId          = {fuzzy("JobId")};
+    static constexpr uintptr_t PlaceVersion   = {fuzzy("PlaceVersion")};
+    static constexpr uintptr_t PrimitiveCount = {fuzzy("DataModelPrimitiveCount")};
+    static constexpr uintptr_t ToRenderView1  = {fuzzy("DataModelToRenderView1")};
+    static constexpr uintptr_t ToRenderView2  = {fuzzy("DataModelToRenderView2")};
+    static constexpr uintptr_t ToRenderView3  = {fuzzy("DataModelToRenderView3")};
+}}
+namespace workspace {{ static constexpr uintptr_t world = {fuzzy("World")}; }}
+namespace world {{
+    static constexpr uintptr_t Gravity        = {fuzzy("Gravity")};
+    static constexpr uintptr_t ReadOnlyGravity = {fuzzy("ReadOnlyGravity")};
+}}
+namespace light {{
+    static constexpr uintptr_t Ambient               = {fuzzy("LightingAmbient")};
+    static constexpr uintptr_t OutdoorAmbient        = {fuzzy("OutdoorAmbient")};
+    static constexpr uintptr_t Brightness            = {fuzzy("LightingBrightness")};
+    static constexpr uintptr_t ClockTime             = {fuzzy("ClockTime")};
+    static constexpr uintptr_t LightColor            = {fuzzy("LightColor")};
+    static constexpr uintptr_t LightDirection        = {fuzzy("LightDirection")};
+    static constexpr uintptr_t SunPosition           = {fuzzy("SunPosition")};
+    static constexpr uintptr_t MoonPosition          = {fuzzy("MoonPosition")};
+    static constexpr uintptr_t FogEnd                = {fuzzy("FogEnd")};
+    static constexpr uintptr_t FogStart              = {fuzzy("FogStart")};
+    static constexpr uintptr_t FogColor              = {fuzzy("FogColor")};
+    static constexpr uintptr_t ExposureCompensation  = {fuzzy("ExposureCompensation")};
+    static constexpr uintptr_t GlobalShadows         = {fuzzy("GlobalShadows")};
+    static constexpr uintptr_t ColorShift_Top        = {fuzzy("ColorShift_Top")};
+    static constexpr uintptr_t ColorShift_Bottom     = {fuzzy("ColorShift_Bottom")};
+    static constexpr uintptr_t GeographicLatitude    = {fuzzy("GeographicLatitude")};
+    static constexpr uintptr_t EnvironmentDiffuseScale  = {fuzzy("EnvironmentDiffuseScale")};
+    static constexpr uintptr_t EnvironmentSpecularScale = {fuzzy("EnvironmentSpecularScale")};
+    static constexpr uintptr_t sky                   = {fuzzy("Sky")};
+}}
+namespace mouseservice {{
+    static constexpr uintptr_t InputObject        = {fuzzy("InputObject")};
+    static constexpr uintptr_t InputObject2       = {fuzzy("InputObject")};
+    static constexpr uintptr_t MousePosition      = {fuzzy("MousePosition")};
+    static constexpr uintptr_t SensitivityPointer = {fuzzy("MouseSensitivity")};
+}}
+namespace misc {{
+    static constexpr uintptr_t Value        = {fuzzy("Value")};
+    static constexpr uintptr_t AnimationId  = {fuzzy("AnimationId")};
+    static constexpr uintptr_t StringLength = {fuzzy("StringLength")};
+    static constexpr uintptr_t Adornee      = {fuzzy("Adornee")};
+}}
+namespace silent {{
     static constexpr uintptr_t FramePositionOffsetX = 0x0;
     static constexpr uintptr_t FramePositionOffsetY = 0x8;
-}
-namespace animation {
+}}
+namespace animation {{
     static constexpr uintptr_t animator     = 0x100;
     static constexpr uintptr_t IsPlaying    = 0xa40;
     static constexpr uintptr_t Looped       = 0xdd;
     static constexpr uintptr_t Speed        = 0xcc;
     static constexpr uintptr_t TimePosition = 0xd0;
-    static constexpr uintptr_t AnimationId  = offsets::AnimationId;
-}
-namespace animator { static constexpr uintptr_t ActiveAnimations = offsets::ActiveAnimations; }
-namespace task {
-    static constexpr uintptr_t Pointer  = offsets::TaskSchedulerPointer;
-    static constexpr uintptr_t JobStart = offsets::JobStart;
-    static constexpr uintptr_t JobEnd   = offsets::JobEnd;
-    static constexpr uintptr_t JobName  = offsets::Job_Name;
-    static constexpr uintptr_t MaxFPS   = offsets::TaskSchedulerMaxFPS;
-}
-namespace run {
-    static constexpr uintptr_t HeartbeatFPS  = offsets::HeartbeatFPS;
-    static constexpr uintptr_t HeartbeatTask = offsets::HeartbeatTask;
-}
-namespace physics_sender {
-    static constexpr uintptr_t MaxBandwidthBps = offsets::PhysicsSenderMaxBandwidthBps;
-}
-namespace job {
-    static constexpr uintptr_t fakemodel     = offsets::RenderJobFakeDataModel;
-    static constexpr uintptr_t RealDataModel = offsets::RenderJobRealDataModel;
-    static constexpr uintptr_t view          = offsets::RenderJobRenderView;
-}
-namespace prompt {
-    static constexpr uintptr_t ActionText           = offsets::ProximityPromptActionText;
-    static constexpr uintptr_t Enabled              = offsets::ProximityPromptEnabled;
-    static constexpr uintptr_t GamepadKeyCode        = offsets::ProximityPromptGamepadKeyCode;
-    static constexpr uintptr_t HoldDuration          = offsets::ProximityPromptHoldDuraction;
-    static constexpr uintptr_t MaxActivationDistance = offsets::ProximityPromptMaxActivationDistance;
-    static constexpr uintptr_t KeyCode               = offsets::KeyCode;
-    static constexpr uintptr_t RequiresLineOfSight   = offsets::RequiresLineOfSight;
-    static constexpr uintptr_t ObjectText            = offsets::ProximityPromptMaxObjectText;
-}
+    static constexpr uintptr_t AnimationId  = {fuzzy("AnimationId")};
+}}
+namespace animator {{ static constexpr uintptr_t ActiveAnimations = {fuzzy("ActiveAnimations")}; }}
+namespace task {{
+    static constexpr uintptr_t Pointer  = {fuzzy("TaskSchedulerPointer")};
+    static constexpr uintptr_t JobStart = {fuzzy("JobStart")};
+    static constexpr uintptr_t JobEnd   = {fuzzy("JobEnd")};
+    static constexpr uintptr_t JobName  = {fuzzy("Job_Name")};
+    static constexpr uintptr_t MaxFPS   = {fuzzy("TaskSchedulerMaxFPS")};
+}}
+namespace run {{
+    static constexpr uintptr_t HeartbeatFPS  = {fuzzy("HeartbeatFPS")};
+    static constexpr uintptr_t HeartbeatTask = {fuzzy("HeartbeatTask")};
+}}
+namespace physics_sender {{
+    static constexpr uintptr_t MaxBandwidthBps = {fuzzy("PhysicsSenderMaxBandwidthBps")};
+}}
+namespace job {{
+    static constexpr uintptr_t fakemodel     = {fuzzy("RenderJobFakeDataModel")};
+    static constexpr uintptr_t RealDataModel = {fuzzy("RenderJobRealDataModel")};
+    static constexpr uintptr_t view          = {fuzzy("RenderJobRenderView")};
+}}
+namespace prompt {{
+    static constexpr uintptr_t ActionText           = {fuzzy("ProximityPromptActionText")};
+    static constexpr uintptr_t Enabled              = {fuzzy("ProximityPromptEnabled")};
+    static constexpr uintptr_t GamepadKeyCode        = {fuzzy("ProximityPromptGamepadKeyCode")};
+    static constexpr uintptr_t HoldDuration          = {fuzzy("ProximityPromptHoldDuraction")};
+    static constexpr uintptr_t MaxActivationDistance = {fuzzy("ProximityPromptMaxActivationDistance")};
+    static constexpr uintptr_t KeyCode               = {fuzzy("KeyCode")};
+    static constexpr uintptr_t RequiresLineOfSight   = {fuzzy("RequiresLineOfSight")};
+    static constexpr uintptr_t ObjectText            = {fuzzy("ProximityPromptMaxObjectText")};
+}}
 """
 
 
-def update_offset_file(content, version):
-    """Write new offset.h with header + flat offsets + compat shims."""
+def write_offset_file(data: dict, flat: dict[str, int]) -> bool:
+    version = data.get("Roblox Version", "unknown")
+    dumped  = data.get("Dumped At", "")
+    total   = data.get("Total Offsets", len(flat))
     try:
         lines = [
             "#pragma once",
@@ -264,60 +316,60 @@ def update_offset_file(content, version):
             "#include <string>",
             "namespace offset {",
             f'    inline std::string ClientVersion = "{version}";',
+            f"    // Dumped at {dumped} — {total} offsets",
             "",
-            content.strip(),
+            build_flat_namespace(flat),
             "",
-            get_compat_shims(),
+            get_compat_shims(flat),
             "",
             "} // end namespace offset",
             "",
         ]
-        OFFSET_FILE.write_text('\n'.join(lines), encoding="utf-8")
+        OFFSET_FILE.write_text("\n".join(lines), encoding="utf-8")
         return True
     except Exception as e:
-        print(f"[-] Error writing offset file: {e}")
+        print(f"[-] Error writing offset.h: {e}")
         return False
 
 
 def main():
-    print("=" * 50)
-    print("   RBX External - Offset Updater")
-    print("=" * 50)
+    print("=" * 54)
+    print("   RBX External — Offset Updater (imtheo.lol)")
+    print("=" * 54)
     print()
 
     current = get_current_version()
-    if not current:
-        print("[-] Could not read current version from offset.h")
-        return 1
-    print(f"[*] Current version : {current}")
-    print(f"[*] Checking for updates...")
+    print(f"[*] Current version : {current or 'unknown'}")
+    print(f"[*] Fetching offsets from {OFFSETS_URL}...")
 
-    latest = get_latest_version()
-    if not latest:
-        print("[-] Failed to fetch latest version from API")
+    data = fetch_offsets()
+    if not data:
+        print("[-] Failed to fetch offsets. Check your internet connection.")
         return 1
+
+    latest  = data.get("Roblox Version", "unknown")
+    dumped  = data.get("Dumped At", "")
+    total   = data.get("Total Offsets", 0)
     print(f"[*] Latest version  : {latest}")
+    print(f"[*] Dumped at       : {dumped}")
+    print(f"[*] Total offsets   : {total}")
 
     if latest == current:
-        print("[+] Offsets are already up to date!")
+        print("[+] Already up to date!")
         return 0
 
-    print(f"[!] Update available: {current} -> {latest}")
-    print(f"[*] Downloading latest offsets...")
+    print(f"[!] Updating: {current} -> {latest}")
 
-    content = get_latest_offsets()
-    if not content:
-        print("[-] Failed to fetch latest offsets from API")
+    flat = flatten_offsets(data)
+    print(f"[*] Flattened {len(flat)} offset entries")
+
+    if not write_offset_file(data, flat):
         return 1
 
-    print(f"[*] Writing offset.h...")
-    if not update_offset_file(content, latest):
-        print("[-] Failed to write offset file")
-        return 1
-
-    print(f"[+] Successfully updated: {current} -> {latest}")
+    print("[+] offset.h updated successfully!")
     print()
-    print("[!] Rebuild the project to apply:")
+    print("[!] Rebuild now:")
+    print("    cd c:\\Users\\grabi\\OneDrive\\Documents\\rbloxext")
     print("    msbuild rbx-external.sln /p:Configuration=Release /p:Platform=x64")
     return 0
 

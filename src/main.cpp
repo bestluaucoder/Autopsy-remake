@@ -30,10 +30,10 @@ namespace
 
     void gate()
     {
-        MessageBoxA(nullptr,
-            "made by @n1kvz credits to je.rk for motivation",
-            "UW External",
-            MB_OK | MB_ICONINFORMATION | MB_TOPMOST);
+        // Opens Discord invite in browser then shows a styled native dialog.
+        // The ImGui Discord gate (discord_gate()) handles the in-overlay version.
+        ShellExecuteA(nullptr, "open", "https://discord.gg/Bgy7uae9x",
+                      nullptr, nullptr, SW_SHOWNORMAL);
     }
 
     bool process(const char* processName)

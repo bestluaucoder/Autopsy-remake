@@ -2356,10 +2356,130 @@ static void keepfocus(float elapsed)
 }
 
 static double welcome_start = -1.0;
+static bool   discord_confirmed = false;  // set true when user clicks "I Joined"
+static double discord_start    = -1.0;
 
 static bool welcome_done()
 {
     return welcome_start < 0.0 || (float)(ImGui::GetTime() - welcome_start) > 3.5f;
+}
+
+static void discord_gate()
+{
+    if (discord_confirmed) return;
+
+    if (discord_start < 0.0) discord_start = ImGui::GetTime();
+
+    float elapsed = (float)(ImGui::GetTime() - discord_start);
+    float alpha   = ImClamp(elapsed / 0.3f, 0.f, 1.f);
+
+    ImDrawList* dl   = ImGui::GetForegroundDrawList();
+    ImVec2 display   = ImGui::GetIO().DisplaySize;
+    ImVec2 center    = display * 0.5f;
+
+    // Full-screen dark overlay
+    dl->AddRectFilled({0,0}, display, IM_COL32(4, 5, 10, (int)(235*alpha)));
+
+    // Card dimensions
+    const float CW = 420.f, CH = 220.f;
+    ImVec2 cMin = { center.x - CW*0.5f, center.y - CH*0.5f };
+    ImVec2 cMax = { center.x + CW*0.5f, center.y + CH*0.5f };
+
+    // Card shadow
+    dl->AddRectFilled(cMin+ImVec2(4,6), cMax+ImVec2(4,6),
+        IM_COL32(0,0,0,(int)(120*alpha)), 12.f);
+
+    // Card background
+    dl->AddRectFilled(cMin, cMax, IM_COL32(14,14,20,(int)(245*alpha)), 12.f);
+
+    // Discord purple top bar
+    dl->AddRectFilled(cMin+ImVec2(14,0), cMin+ImVec2(CW-14,2.5f),
+        IM_COL32(88,101,242,(int)(230*alpha)), 1.f);
+
+    // Outer border
+    dl->AddRect(cMin, cMax, IM_COL32(255,255,255,(int)(18*alpha)), 12.f, 0, 1.f);
+
+    // Discord circle icon
+    ImVec2 ic = { center.x, cMin.y + 44.f };
+    dl->AddCircleFilled(ic, 22.f, IM_COL32(88,101,242,(int)(220*alpha)), 32);
+    // "D" letter inside
+    ImFont* iFont = Tahoma_BoldXP ? Tahoma_BoldXP : ImGui::GetFont();
+    float   ifs   = iFont->LegacySize + 2.f;
+    ImVec2  isz   = iFont->CalcTextSizeA(ifs, FLT_MAX, 0.f, "D");
+    dl->AddText(iFont, ifs, ic - isz*0.5f,
+        IM_COL32(255,255,255,(int)(255*alpha)), "D");
+
+    // Title
+    ImFont* bf   = Tahoma_BoldXP ? Tahoma_BoldXP : ImGui::GetFont();
+    float   bfs  = bf->LegacySize + 1.f;
+    const char* title = "Join our Discord";
+    ImVec2 tsz = bf->CalcTextSizeA(bfs, FLT_MAX, 0.f, title);
+    dl->AddText(bf, bfs, { center.x - tsz.x*0.5f, cMin.y + 76.f },
+        IM_COL32(230,232,242,(int)(245*alpha)), title);
+
+    // Sub-text
+    ImFont* rf  = UiFont ? UiFont : ImGui::GetFont();
+    float   rfs = rf->LegacySize;
+    const char* sub1 = "You must join the UW External Discord to use this software.";
+    const char* sub2 = "discord.gg/Bgy7uae9x";
+    ImVec2 s1sz = rf->CalcTextSizeA(rfs, FLT_MAX, 0.f, sub1);
+    ImVec2 s2sz = rf->CalcTextSizeA(rfs, FLT_MAX, 0.f, sub2);
+    dl->AddText(rf, rfs, { center.x - s1sz.x*0.5f, cMin.y + 103.f },
+        IM_COL32(150,155,170,(int)(210*alpha)), sub1);
+    dl->AddText(rf, rfs, { center.x - s2sz.x*0.5f, cMin.y + 120.f },
+        IM_COL32(88,101,242,(int)(220*alpha)), sub2);
+
+    // ── Buttons ────────────────────────────────────────────────────────────────
+    const float BW = 140.f, BH = 32.f, gap = 12.f;
+    float totalBW = BW*2 + gap;
+    float bY = cMax.y - BH - 18.f;
+
+    // "Open Discord" button (left)
+    ImVec2 b1Min = { center.x - totalBW*0.5f,       bY };
+    ImVec2 b1Max = { center.x - totalBW*0.5f + BW,  bY + BH };
+    bool   b1Hov = ImGui::IsMouseHoveringRect(b1Min, b1Max);
+    ImU32  b1Col = b1Hov ? IM_COL32(108,121,255,(int)(240*alpha))
+                          : IM_COL32(88,101,242,(int)(200*alpha));
+    dl->AddRectFilled(b1Min, b1Max, b1Col, 7.f);
+    dl->AddRect(b1Min, b1Max, IM_COL32(130,145,255,(int)(120*alpha)), 7.f, 0, 1.f);
+    const char* lbl1 = "Open Discord";
+    ImVec2 l1sz = rf->CalcTextSizeA(rfs, FLT_MAX, 0.f, lbl1);
+    dl->AddText(rf, rfs, b1Min + ImVec2((BW-l1sz.x)*0.5f,(BH-rfs)*0.5f),
+        IM_COL32(255,255,255,(int)(245*alpha)), lbl1);
+
+    if (b1Hov && ImGui::IsMouseClicked(ImGuiMouseButton_Left))
+        ShellExecuteA(nullptr, "open", "https://discord.gg/Bgy7uae9x",
+                      nullptr, nullptr, SW_SHOWNORMAL);
+
+    // "I Joined ✓" button (right)
+    ImVec2 b2Min = { center.x - totalBW*0.5f + BW + gap,      bY };
+    ImVec2 b2Max = { center.x - totalBW*0.5f + BW*2 + gap,    bY + BH };
+    bool   b2Hov = ImGui::IsMouseHoveringRect(b2Min, b2Max);
+    ImU32  b2Col = b2Hov ? IM_COL32(50,100,22,(int)(240*alpha))
+                          : IM_COL32(36,76,14,(int)(200*alpha));
+    ImU32  b2Brd = b2Hov ? IM_COL32(100,200,40,(int)(200*alpha))
+                          : IM_COL32(70,150,25,(int)(140*alpha));
+    dl->AddRectFilled(b2Min, b2Max, b2Col, 7.f);
+    dl->AddRect(b2Min, b2Max, b2Brd, 7.f, 0, 1.f);
+    const char* lbl2 = "I Joined  \xE2\x9C\x93";
+    ImVec2 l2sz = rf->CalcTextSizeA(rfs, FLT_MAX, 0.f, lbl2);
+    dl->AddText(rf, rfs, b2Min + ImVec2((BW-l2sz.x)*0.5f,(BH-rfs)*0.5f),
+        IM_COL32(200,240,160,(int)(245*alpha)), lbl2);
+
+    if (b2Hov && ImGui::IsMouseClicked(ImGuiMouseButton_Left))
+        discord_confirmed = true;
+
+    // Block all input to the rest of the UI while gate is showing
+    ImGui::SetNextWindowPos({0,0});
+    ImGui::SetNextWindowSize(display);
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, {0,0});
+    ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0,0,0,0));
+    ImGui::Begin("##discord_blocker", nullptr,
+        ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoInputs |
+        ImGuiWindowFlags_NoBringToFrontOnFocus | ImGuiWindowFlags_NoNav);
+    ImGui::End();
+    ImGui::PopStyleColor();
+    ImGui::PopStyleVar();
 }
 
 static void welcome(bool menuOpen)
@@ -3649,6 +3769,11 @@ void graphic::visual()
     media::render();
     hud::render(Running);
     notify::render();
+    // Discord gate — blocks entire UI until user confirms they joined
+    if (!discord_confirmed) {
+        discord_gate();
+        return;
+    }
     welcome(Running);
 
     // Crosshair + Tracers drawn on foreground

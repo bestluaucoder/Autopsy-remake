@@ -3,10 +3,10 @@
 #include <cstdint>
 #include <string>
 namespace offset {
-    inline std::string ClientVersion = "version-36a2600cebf1487d";
+    inline std::string ClientVersion = "version-ddf02245bdbb428c";
 
 /*
-Roblox Version: version-36a2600cebf1487d
+Roblox Version: version-ddf02245bdbb428c
 THIS IS AUTOMATIC AND ERRORS CAN OCCUR
 Contact: contact@rbxoffsets.xyz
 */
@@ -18,7 +18,7 @@ namespace offsets {
     inline constexpr uintptr_t AccountAge = 0x35c;
     inline constexpr uintptr_t ActiveAnimations = 0xa20;
     inline constexpr uintptr_t Adornee = 0xf0;
-    inline constexpr uintptr_t AirDensity = 0x18;
+    inline constexpr uintptr_t AirDensity = 0x0;
     inline constexpr uintptr_t Anchored = 0x2;
     inline constexpr uintptr_t AnimationId = 0xc0;
     inline constexpr uintptr_t AtmosphereColor = 0xb8;
@@ -65,7 +65,7 @@ namespace offsets {
     inline constexpr uintptr_t ByteCode_Size = 0x20;
     inline constexpr uintptr_t Camera = 0x488;
     inline constexpr uintptr_t CameraImagePlaneDepth = 0x2d0;
-    inline constexpr uintptr_t CameraMaxZoomDistance = 0x368;
+    inline constexpr uintptr_t CameraMaxZoomDistance = 0x1bd;
     inline constexpr uintptr_t CameraMinZoomDistance = 0x36c;
     inline constexpr uintptr_t CameraMode = 0x370;
     inline constexpr uintptr_t CameraOffset = 0x128;
@@ -104,7 +104,7 @@ namespace offsets {
     inline constexpr uintptr_t ComponentMap = 0x38;
     inline constexpr uintptr_t CreatorId = 0x180;
     inline constexpr uintptr_t CurrentTextBox = 0x48;
-    inline constexpr uintptr_t DataModelPrimitiveCount = 0x498;
+    inline constexpr uintptr_t DataModelPrimitiveCount = 0x3c0;
     inline constexpr uintptr_t DataModelToRenderView1 = 0x1c8;
     inline constexpr uintptr_t DataModelToRenderView2 = 0x8;
     inline constexpr uintptr_t DataModelToRenderView3 = 0x28;
@@ -135,31 +135,31 @@ namespace offsets {
     inline constexpr uintptr_t EvaluateStateMachine = 0x1d8;
     inline constexpr uintptr_t ExposureCompensation = 0x11c;
     inline constexpr uintptr_t FakeDataModel = 0xa90;
-    inline constexpr uintptr_t FakeDataModelPointer = 0x84a9e98;
+    inline constexpr uintptr_t FakeDataModelPointer = 0x7d28508;
     inline constexpr uintptr_t FakeDataModelToDataModel = 0x1d0;
-    inline constexpr uintptr_t FallenPartsDestroyHeight = 0x208;
+    inline constexpr uintptr_t FallenPartsDestroyHeight = 0x0;
     inline constexpr uintptr_t FloorMaterial = 0x184;
     inline constexpr uintptr_t FogColor = 0xec;
     inline constexpr uintptr_t FogEnd = 0x124;
     inline constexpr uintptr_t FogStart = 0x128;
     inline constexpr uintptr_t FOV = 0x140;
     inline constexpr uintptr_t GameId = 0x188;
-    inline constexpr uintptr_t GameLoaded = 0x668;
+    inline constexpr uintptr_t GameLoaded = 0x578;
     inline constexpr uintptr_t GeographicLatitude = 0x180;
     inline constexpr uintptr_t GlobalShadows = 0x138;
-    inline constexpr uintptr_t GlobalWind = 0x3c;
+    inline constexpr uintptr_t GlobalWind = 0x0;
     inline constexpr uintptr_t GradientBottom = 0x184;
     inline constexpr uintptr_t GradientTop = 0x140;
     inline constexpr uintptr_t GrassLength = 0x188;
-    inline constexpr uintptr_t Gravity = 0x210;
+    inline constexpr uintptr_t Gravity = 0x1a4;
     inline constexpr uintptr_t GuiPosition = 0x510;
     inline constexpr uintptr_t GuiRotation = 0x178;
     inline constexpr uintptr_t GuiSize = 0x530;
     inline constexpr uintptr_t Health = 0x188;
     inline constexpr uintptr_t HealthDisplayDistance = 0x390;
     inline constexpr uintptr_t HealthDisplayType = 0x190;
-    inline constexpr uintptr_t HeartbeatFPS = 0xb4;
-    inline constexpr uintptr_t HeartbeatTask = 0xc08;
+    inline constexpr uintptr_t HeartbeatFPS = 0xf4;
+    inline constexpr uintptr_t HeartbeatTask = 0x3b8;
     inline constexpr uintptr_t HipHeight = 0x194;
     inline constexpr uintptr_t HumanoidAutoJumpEnabled = 0x1d4;
     inline constexpr uintptr_t HumanoidAutomaticScalingEnabled = 0x1d6;
@@ -173,11 +173,12 @@ namespace offsets {
     inline constexpr uintptr_t Image = 0x988;
     inline constexpr uintptr_t InputObject = 0x100;
     inline constexpr uintptr_t IsCoreScript = 0x0;
+    inline constexpr uintptr_t IsPlaying = 0x140;
     inline constexpr uintptr_t IsWalking = 0x917;
     inline constexpr uintptr_t Job_Name = 0x18;
     inline constexpr uintptr_t JobEnd = 0xd0;
     inline constexpr uintptr_t JobId = 0x120;
-    inline constexpr uintptr_t JobsPointer = 0x8041ec8;
+    inline constexpr uintptr_t JobsPointer = 0x82b9f48;
     inline constexpr uintptr_t JobStart = 0xc8;
     inline constexpr uintptr_t Jump = 0x1da;
     inline constexpr uintptr_t JumpHeight = 0x1a0;
@@ -240,7 +241,7 @@ namespace offsets {
     inline constexpr uintptr_t MoonPosition = 0x174;
     inline constexpr uintptr_t MoonTextureId = 0xc8;
     inline constexpr uintptr_t MousePosition = 0xd4;
-    inline constexpr uintptr_t MouseSensitivity = 0x0;
+    inline constexpr uintptr_t MouseSensitivity = 0x7ee9b58;
     inline constexpr uintptr_t MoveDirection = 0x140;
     inline constexpr uintptr_t MoveToPart = 0x118;
     inline constexpr uintptr_t MoveToPoint = 0x164;
@@ -266,11 +267,11 @@ namespace offsets {
     inline constexpr uintptr_t ParticleVelocityInheritance = 0x260;
     inline constexpr uintptr_t ParticleZOffset = 0x264;
     inline constexpr uintptr_t PartSize = 0x1b8;
-    inline constexpr uintptr_t PhysicsSenderMaxBandwidthBps = 0x798fa88;
+    inline constexpr uintptr_t PhysicsSenderMaxBandwidthBps = 0x78d4748;
     inline constexpr uintptr_t PlaceId = 0x190;
     inline constexpr uintptr_t PlaceVersion = 0x1ac;
     inline constexpr uintptr_t PlatformStand = 0x1dc;
-    inline constexpr uintptr_t PlatformStatePointer = 0x1f388a4b;
+    inline constexpr uintptr_t PlatformStatePointer = 0x2513d21e;
     inline constexpr uintptr_t PlayerConfigurerPointer = 0x0;
     inline constexpr uintptr_t PlayerMouse = 0x11d8;
     inline constexpr uintptr_t PlayerMouseWorkspace = 0x150;
@@ -281,7 +282,7 @@ namespace offsets {
     inline constexpr uintptr_t PrimitiveAssemblyLinearVelocity = 0xf8;
     inline constexpr uintptr_t PrimitiveFlags = 0x1b6;
     inline constexpr uintptr_t PrimitiveOwner = 0x208;
-    inline constexpr uintptr_t Primitives = 0x288;
+    inline constexpr uintptr_t Primitives = 0x0;
     inline constexpr uintptr_t PrimitiveValidateValue = 0x6;
     inline constexpr uintptr_t ProximityPromptActionText = 0xb0;
     inline constexpr uintptr_t ProximityPromptEnabled = 0x136;
@@ -307,7 +308,7 @@ namespace offsets {
     inline constexpr uintptr_t ScriptHash = 0x1a0;
     inline constexpr uintptr_t SeatOccupant = 0x1b0;
     inline constexpr uintptr_t SeatPart = 0x108;
-    inline constexpr uintptr_t ServerIP = 0x650;
+    inline constexpr uintptr_t ServerIP = 0x560;
     inline constexpr uintptr_t Shape = 0x159;
     inline constexpr uintptr_t Sit = 0x1dd;
     inline constexpr uintptr_t Sky = 0x1c8;
@@ -327,7 +328,7 @@ namespace offsets {
     inline constexpr uintptr_t SoundSoundId = 0xc8;
     inline constexpr uintptr_t SoundVolume = 0x130;
     inline constexpr uintptr_t Source = 0x164;
-    inline constexpr uintptr_t SpawnLocationAllowTeamChangeOnTouch = 0x3d;
+    inline constexpr uintptr_t SpawnLocationAllowTeamChangeOnTouch = 0x188;
     inline constexpr uintptr_t SpawnLocationEnabled = 0x189;
     inline constexpr uintptr_t SpawnLocationForcefieldDuration = 0x180;
     inline constexpr uintptr_t SpawnLocationNeutral = 0x18a;
@@ -355,7 +356,7 @@ namespace offsets {
     inline constexpr uintptr_t SurfaceRoughnessMap = 0x188;
     inline constexpr uintptr_t TargetPoint = 0x14c;
     inline constexpr uintptr_t TaskSchedulerMaxFPS = 0xb0;
-    inline constexpr uintptr_t TaskSchedulerPointer = 0x8041ec8;
+    inline constexpr uintptr_t TaskSchedulerPointer = 0x82b9f48;
     inline constexpr uintptr_t Team = 0x2d8;
     inline constexpr uintptr_t TeamColor = 0x3ac;
     inline constexpr uintptr_t TerrainMaterialColors = 0x438;
@@ -372,7 +373,7 @@ namespace offsets {
     inline constexpr uintptr_t ToolTextureId = 0x360;
     inline constexpr uintptr_t ToolTooltip = 0x468;
     inline constexpr uintptr_t Transparency = 0xd0;
-    inline constexpr uintptr_t UnionOperationAssetId = 0x288;
+    inline constexpr uintptr_t UnionOperationAssetId = 0x290;
     inline constexpr uintptr_t UseJumpPower = 0x1e0;
     inline constexpr uintptr_t UserId = 0x300;
     inline constexpr uintptr_t ValidatePrimitive = 0x6;
@@ -386,7 +387,7 @@ namespace offsets {
     inline constexpr uintptr_t viewmatrix = 0x150;
     inline constexpr uintptr_t ViewportSize = 0x2c8;
     inline constexpr uintptr_t VisualEngine = 0x10;
-    inline constexpr uintptr_t VisualEnginePointer = 0x81d61c8;
+    inline constexpr uintptr_t VisualEnginePointer = 0x8447c68;
     inline constexpr uintptr_t WalkSpeed = 0x1d0;
     inline constexpr uintptr_t WalkSpeedCheck = 0x3bc;
     inline constexpr uintptr_t WalkTimer = 0x408;
@@ -401,10 +402,10 @@ namespace offsets {
     inline constexpr uintptr_t WeldPart1 = 0x128;
     inline constexpr uintptr_t WindowInputState = 0x2c0;
     inline constexpr uintptr_t Workspace = 0x160;
-    inline constexpr uintptr_t World = 0x3e0;
-    inline constexpr uintptr_t WorldAirProperties = 0x218;
-    inline constexpr uintptr_t worldStepsPerSec = 0x680;
-    inline constexpr uintptr_t ZIndex = 0x18b;
+    inline constexpr uintptr_t World = 0x368;
+    inline constexpr uintptr_t WorldAirProperties = 0x0;
+    inline constexpr uintptr_t worldStepsPerSec = 0xc16;
+    inline constexpr uintptr_t ZIndex = 0x5a4;
 }
 
 
